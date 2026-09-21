@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskMail</title>
+    <link rel="stylesheet" href="tray.css">
+</head>
+<body>
+    <section class="tray-menu" aria-label="Menú de TaskMail">
+        <div class="tray-heading">
+            <span class="tray-mark"><img src="./Build/taskmailicono.png" alt=""></span>
+            <div>
+                <strong>TaskMail</strong>
+                <small><i></i> Recordatorios activos</small>
+            </div>
+            <span class="tray-status">LIVE</span>
+        </div>
+        <div class="tray-divider"></div>
+        <div class="tray-section-label">ESPACIO DE TRABAJO</div>
+        <button id="tray-open"><span class="tray-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 4h6v6"></path><path d="m20 4-9 9"></path><path d="M18 13v6H4V5h6"></path></svg></span><b>Abrir aplicación</b><em>Enter</em></button>
+        <button id="tray-check"><span class="tray-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 1 4"></path><path d="M20 4v7h-7"></path></svg></span>Comprobar recordatorios</button>
+        <div class="tray-divider"></div>
+        <button id="tray-quit" class="tray-danger"><span class="tray-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"></path></svg></span>Salir de TaskMail</button>
+    </section>
+    <script>
+        document.getElementById('tray-open').addEventListener('click', () => window.api.tray.open());
+        document.getElementById('tray-check').addEventListener('click', () => window.api.tray.checkReminders());
+        document.getElementById('tray-quit').addEventListener('click', () => window.api.tray.quit());
+    </script>
+</body>
+</html>

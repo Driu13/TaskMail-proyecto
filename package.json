@@ -1,0 +1,50 @@
+{
+  "name": "taskmail-proyecto",
+  "version": "1.0.0",
+  "description": "App de recordatorios de eventos culturales de Guatemala",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir", 
+    "dist": "electron-builder"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "node-cron": "^4.6.0",
+    "nodemailer": "^10.0.2"
+  },
+  "devDependencies": {
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.taskmail.desktop",
+    "productName": "TaskMail",
+    "artifactName": "TaskMail-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!.taskmail-data/**/*",
+      "!dist/**/*",
+      "!CUsersandre.claudeplans/**/*",
+      "!CUsersandre.claudeplansrustling-brewing-thunder-agent-a5117ed7fb88a1fd0.md",
+      "!CUsersandre.claudeplansrustling-brewing-thunder-agent-ae61bb53a5482c106.md"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "./Build/taskmailicono.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TaskMail",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

@@ -1,0 +1,11 @@
+# Dependencias (se regeneran con "npm install")
+node_modules/
+
+# Datos locales de la app y builds
+.taskmail-data/
+dist/
+
+# Archivos de sistema / editor
+.DS_Store
+Thumbs.db
+*.log

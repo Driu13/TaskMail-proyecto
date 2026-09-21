@@ -1,0 +1,12 @@
+{
+  "smtp": {
+    "provider": "office365",
+    "host": "smtp.office365.com",
+    "port": 587,
+    "encryption": "starttls",
+    "auth": {
+      "user": "andrew.martinez@cunizab.edu.gt",
+      "pass": "1234567Ae13"
+    }
+  }
+}
