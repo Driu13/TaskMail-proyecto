@@ -1,12 +1,12 @@
 {
   "smtp": {
-    "provider": "office365",
-    "host": "smtp.office365.com",
+    "provider": "gmail",
+    "host": "smtp.gmail.com",
     "port": 587,
     "encryption": "starttls",
     "auth": {
-      "user": "andrew.martinez@cunizab.edu.gt",
-      "pass": "1234567Ae13"
+      "user": "andrewmartine37@gmail.com",
+      "pass": "vhul eefy eftw kbml"
     }
   }
 }
