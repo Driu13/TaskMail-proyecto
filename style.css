@@ -1793,7 +1793,52 @@ body.login-body.theme-dark { background: radial-gradient(circle at 20% 0%, #2448
 .theme-dark .login-brand h1, .theme-dark .auth-view h2 { color: var(--text-primary) !important; }
 .theme-dark .login-brand p, .theme-dark .auth-subtitle, .theme-dark .field-group label, .theme-dark .auth-footer, .theme-dark .requirement { color: var(--text-secondary) !important; }
 .theme-dark .modal-overlay { background: rgba(4, 15, 16, 0.72); }
+/* ==========================================
+   MODO OSCURO: REGLAS PARA EL CALENDARIO
+   =========================================== */
 
+/* Contenedor y cuadrícula del calendario */
+body.theme-dark .calendar-wrapper,
+body.theme-dark .event-detail-panel {
+    background: var(--bg-surface) !important;
+    border-color: var(--border-subtle) !important;
+}
+
+/* Nombres de días de la semana (Dom, Lun, Mar...) */
+body.theme-dark .calendar-days-header span {
+    color: var(--text-secondary) !important;
+}
+
+/* Celdas individuales de los días */
+body.theme-dark .cal-day {
+    background: #203335 !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-subtle) !important;
+}
+
+/* Día seleccionado en modo oscuro */
+body.theme-dark .cal-day.selected {
+    background: var(--bg-accent) !important;
+    color: #ffffff !important;
+    border-color: var(--bg-accent) !important;
+}
+
+/* Efecto hover sobre un día en modo oscuro */
+body.theme-dark .cal-day:hover:not(.selected) {
+    background: var(--bg-elevated) !important;
+    border-color: var(--border-strong) !important;
+}
+
+/* Punto indicador de evento activo */
+body.theme-dark .cal-day.has-event::after {
+    background: #f6aa63 !important; /* Color naranja de acento */
+}
+
+/* Panel de detalles de eventos del día */
+body.theme-dark .event-detail-panel h3,
+body.theme-dark #detail-content h3 {
+    color: var(--text-primary) !important;
+}
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
@@ -1810,3 +1855,4 @@ body.login-body.theme-dark { background: radial-gradient(circle at 20% 0%, #2448
 *::-webkit-scrollbar {
     display: none;              /* Chrome, Safari, Opera (Electron) */
 }
+

@@ -236,7 +236,7 @@ function applyStartupPreference(enabled) {
 }
 
 function createTrayIcon() {
-    const logoPath = path.join(__dirname, 'Build', 'Imagen de Codex 16 sept 2026, 21_59_42.ico');
+    const logoPath = path.join(__dirname, 'Build', 'taskmailicono.png');
     return nativeImage.createFromPath(logoPath).resize({ width: 32, height: 32 });
 }
 

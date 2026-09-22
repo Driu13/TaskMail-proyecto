@@ -1592,7 +1592,7 @@ function showContextMenu(x, y, target) {
     menu.className = 'app-context-menu';
     menu.innerHTML = `
         <div class="context-menu-header">
-            <span class="context-menu-logo"><img src="Build/Imagen de Codex 16 sept 2026, 21_59_42.ico" alt=""></span>
+            <span class="context-menu-logo"><img src="Build/taskmailicono.png" alt=""></span>
             <div><strong>TaskMail</strong><small>${State.currentView === 'dashboard' ? t('dashboard') : State.currentView}</small></div>
         </div>
         <div class="context-menu-section-label">${State.language === 'es' ? 'Acciones rápidas' : 'Quick actions'}</div>

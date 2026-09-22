@@ -1,3 +1,121 @@
+
+
+// ==========================================
+// DICCIONARIO Y LÓGICA DE TRADUCCIÓN EN LOGIN
+// ==========================================
+const LoginTranslations = {
+    en: {
+        loginTitle: 'Welcome back',
+        loginSubtitle: 'Enter your details to access your account',
+        registerTitle: 'Create account',
+        registerSubtitle: 'Join TaskMail to manage your events',
+        usernameLabel: 'Username',
+        usernamePlaceholderLogin: 'Enter your username',
+        usernamePlaceholderRegister: 'Choose a username',
+        passwordLabel: 'Password',
+        rememberMe: 'Remember me',
+        signInBtn: 'Sign In',
+        createAccountBtn: 'Create Account',
+        noAccount: "Don't have an account?",
+        createOne: 'Create one',
+        alreadyHaveAccount: 'Already have an account?',
+        signInLink: 'Sign in',
+        passRequirementsTitle: 'Password Requirements',
+        reqLength: '8-20 characters',
+        reqUpper: 'One uppercase letter',
+        reqLower: 'One lowercase letter',
+        reqNumber: 'One number',
+        strengthVeryWeak: 'Very weak',
+        strengthWeak: 'Weak',
+        strengthMedium: 'Medium',
+        strengthStrong: 'Strong'
+    },
+    es: {
+        loginTitle: 'Bienvenido de nuevo',
+        loginSubtitle: 'Ingresa tus datos para acceder a tu cuenta',
+        registerTitle: 'Crear cuenta',
+        registerSubtitle: 'Únete a TaskMail para gestionar tus eventos',
+        usernameLabel: 'Nombre de usuario',
+        usernamePlaceholderLogin: 'Ingresa tu nombre de usuario',
+        usernamePlaceholderRegister: 'Elige un nombre de usuario',
+        passwordLabel: 'Contraseña',
+        rememberMe: 'Recordarme',
+        signInBtn: 'Iniciar Sesión',
+        createAccountBtn: 'Crear Cuenta',
+        noAccount: '¿No tienes una cuenta?',
+        createOne: 'Crea una',
+        alreadyHaveAccount: '¿Ya tienes una cuenta?',
+        signInLink: 'Iniciar sesión',
+        passRequirementsTitle: 'Requisitos de la contraseña',
+        reqLength: '8-20 caracteres',
+        reqUpper: 'Una letra mayúscula',
+        reqLower: 'Una letra minúscula',
+        reqNumber: 'Un número',
+        strengthVeryWeak: 'Muy débil',
+        strengthWeak: 'Débil',
+        strengthMedium: 'Media',
+        strengthStrong: 'Fuerte'
+    }
+};
+
+let currentLang = localStorage.getItem('appLanguage') || 'es';
+
+function getTranslation(key) {
+    return (LoginTranslations[currentLang] && LoginTranslations[currentLang][key]) || key;
+}
+
+function applyLoginTranslations() {
+    // Actualiza textos por atributo data-i18n
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.dataset.i18n;
+        el.textContent = getTranslation(key);
+    });
+
+    // Actualiza placeholders
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+        const key = el.dataset.i18nPh;
+        el.placeholder = getTranslation(key);
+    });
+
+    // Sincroniza el selector de idioma
+    const langSelector = document.getElementById('login-lang-selector');
+    if (langSelector) {
+        langSelector.value = currentLang;
+    }
+}
+
+// Inicialización de idioma al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
+    applyLoginTranslations();
+
+    const langSelector = document.getElementById('login-lang-selector');
+    if (langSelector) {
+        langSelector.addEventListener('change', (e) => {
+            currentLang = e.target.value;
+            localStorage.setItem('appLanguage', currentLang);
+            applyLoginTranslations();
+        });
+    }
+});
+
+// ==========================================
+// UTILIDADES DE INTERFAZ EXISTENTES
+// ==========================================
+function togglePassword(id) {
+    const input = document.getElementById(id);
+    const toggle = input.parentNode.querySelector('.toggle-password');
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        toggle.dataset.visible = 'true';
+        toggle.setAttribute('aria-label', currentLang === 'es' ? 'Ocultar contraseña' : 'Hide password');
+    } else {
+        input.type = 'password';
+        toggle.dataset.visible = 'false';
+        toggle.setAttribute('aria-label', currentLang === 'es' ? 'Mostrar contraseña' : 'Show password');
+    }
+}
+
 // ==========================================
 // UTILIDADES DE INTERFAZ
 // ==========================================
