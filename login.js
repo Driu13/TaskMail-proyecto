@@ -299,21 +299,14 @@ document.getElementById('formularioRegistro').addEventListener('submit', async f
             return;
         }
 
-        // Cuenta creada: inicia sesión automáticamente y entra directo a la app
-        const loginResult = await window.api.auth.login(usuario, password);
-        if (loginResult && loginResult.success) {
-            localStorage.setItem('sesionActual', JSON.stringify(loginResult.session));
-            document.body.classList.add('login-exiting');
-            window.setTimeout(() => { window.location.href = 'index.html'; }, 260);
-            return;
-        }
-
-        // Si por alguna razón el login automático falla, al menos deja la cuenta lista para entrar
+        // Cuenta creada: regresa a la vista de Login con el usuario ya rellenado
+        // para que solo falte escribir la contraseña y presionar "Iniciar Sesión".
         document.getElementById('formularioRegistro').reset();
         actualizarValidadorVisual('');
         switchAuthMode('login');
         document.getElementById('loginUsuario').value = usuario;
         mostrarError('errorLoginGeneral', '✅ Cuenta creada con éxito. Inicia sesión.');
+        document.getElementById('loginPassword').focus();
     } catch (error) {
         mostrarError('errorRegistroUsuario', '❌ Error al crear la cuenta.');
     } finally {

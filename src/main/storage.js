@@ -288,6 +288,28 @@ function createUser(username, password) {
     writeData(data);
 }
 
+// Renombra a un usuario existente. El username es la llave del registro,
+// así que hay que mover todo el objeto de datos a la nueva llave.
+function renameUser(oldUsername, newUsername) {
+    const trimmedNew = String(newUsername || '').trim();
+
+    if (!/^[a-zA-Z0-9_]{4,20}$/.test(trimmedNew)) {
+        throw new Error('El nuevo nombre de usuario debe tener 4-20 caracteres (letras, números o guion bajo).');
+    }
+
+    const data = readData();
+    if (!data.users[oldUsername]) throw new Error('Usuario no encontrado');
+    if (oldUsername === trimmedNew) return { username: trimmedNew }; // sin cambios
+
+    if (data.users[trimmedNew]) throw new Error('Ese nombre de usuario ya está en uso');
+
+    data.users[trimmedNew] = data.users[oldUsername];
+    delete data.users[oldUsername];
+    writeData(data);
+
+    return { username: trimmedNew };
+}
+
 function getDataForUser(username) {
     const data = readData();
 
@@ -480,6 +502,7 @@ function getAllUsersForEmail() {
 module.exports = {
     validateUser,
     createUser,
+    renameUser,
     getDataForUser,
     updateUserData,
     updateTask,

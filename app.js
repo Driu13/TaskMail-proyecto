@@ -1140,7 +1140,11 @@ async function renderSettings(container) {
                 <h2>${t('profile')}</h2>
                 <div class="field-group">
                     <label>${t('username')}</label>
-                    <input type="text" value="${State.currentUser.usuario}" disabled>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="profile-username" value="${State.currentUser.usuario}" maxlength="20">
+                        <button class="btn-save btn-secondary" id="btn-save-username" style="white-space: nowrap;">Guardar</button>
+                    </div>
+                    <span class="field-error" id="username-error"></span>
                 </div>
                 <div class="field-group">
                     <label>${t('emailPrefs')}</label>
@@ -1344,6 +1348,38 @@ async function renderSettings(container) {
             alert('No se pudo guardar el correo: ' + result.error);
             return;
         }
+        renderView('settings');
+    });
+
+    document.getElementById('btn-save-username').addEventListener('click', async () => {
+        const input = document.getElementById('profile-username');
+        const errorEl = document.getElementById('username-error');
+        const newUsername = input.value.trim();
+        errorEl.textContent = '';
+
+        if (newUsername === State.currentUser.usuario) return;
+
+        if (!/^[a-zA-Z0-9_]{4,20}$/.test(newUsername)) {
+            errorEl.textContent = 'Debe tener 4-20 caracteres: letras, números o guion bajo.';
+            return;
+        }
+
+        const btn = document.getElementById('btn-save-username');
+        btn.disabled = true;
+
+        const result = await window.api.user.renameUsername(State.currentUser.usuario, newUsername);
+        btn.disabled = false;
+
+        if (!result.success) {
+            errorEl.textContent = result.error;
+            return;
+        }
+
+        // Actualiza el usuario en memoria y en la sesión guardada
+        State.currentUser.usuario = result.username;
+        localStorage.setItem('sesionActual', JSON.stringify(State.currentUser));
+        await loadUserData();
+        updateUserProfile();
         renderView('settings');
     });
 
