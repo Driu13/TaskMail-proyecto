@@ -3,15 +3,26 @@ const path = require('path');
 const fs = require('fs');
 const storage = require('./storage');
 
+let electronApp = null;
 let DesktopNotification = null;
 try {
     const electron = require('electron');
+    electronApp = electron.app || null;
     DesktopNotification = electron.Notification || null;
 } catch (error) {
+    electronApp = null;
     DesktopNotification = null;
 }
 
-const CONFIG_FILE = path.join(__dirname, '../../config.json');
+// Las credenciales de Microsoft Graph viven en la carpeta de datos de usuario
+// del sistema (p. ej. C:\Users\<tú>\AppData\Roaming\TaskMail), nunca dentro de
+// la carpeta del proyecto.
+function getConfigFilePath() {
+    if (electronApp && typeof electronApp.getPath === 'function') {
+        return path.join(electronApp.getPath('userData'), 'config.json');
+    }
+    return path.join(__dirname, '../../config.json');
+}
 
 // ==========================================
 // ENVÍO DE CORREO VÍA MICROSOFT GRAPH API
@@ -24,10 +35,11 @@ const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
 let cachedToken = null; // { accessToken, expiresAt }
 
 function readGraphConfig() {
-    if (!fs.existsSync(CONFIG_FILE)) {
+    const configFile = getConfigFilePath();
+    if (!fs.existsSync(configFile)) {
         return { graph: {} };
     }
-    const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+    const raw = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
     return { graph: raw.graph || {} };
 }
 
@@ -70,7 +82,7 @@ function configureGraph({ tenantId, clientId, clientSecret, senderEmail }) {
         }
     };
 
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+    fs.writeFileSync(getConfigFilePath(), JSON.stringify(config, null, 2), 'utf-8');
     cachedToken = null; // fuerza a pedir un token nuevo con las credenciales actualizadas
 
     return getGraphStatus();
@@ -78,7 +90,7 @@ function configureGraph({ tenantId, clientId, clientSecret, senderEmail }) {
 
 // Borra las credenciales guardadas
 function clearGraph() {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ graph: {} }, null, 2), 'utf-8');
+    fs.writeFileSync(getConfigFilePath(), JSON.stringify({ graph: {} }, null, 2), 'utf-8');
     cachedToken = null;
     return getGraphStatus();
 }
@@ -295,6 +307,7 @@ async function sendReminderOnce(user, periodKey, events, subject, label) {
     const result = await sendEmail(user.destinatarios, subject, buildEmailBody(label, events));
     if (result) {
         sentReminderKeys.add(key);
+        storage.addSentReminderKey(key);
         showDesktopNotification(label, events, user.username);
         return true;
     }
@@ -323,12 +336,12 @@ function formatLocalDate(date) {
 }
 
 function formatLocalTime(date) {
-    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 function normalizeTime(time) {
     const parts = String(time).split(':');
-    return `${String(parts[0] || '00').padStart(2, '0')}:${String(parts[1] || '00').padStart(2, '0')}:${String(parts[2] || '00').padStart(2, '0')}`;
+    return `${String(parts[0] || '00').padStart(2, '0')}:${String(parts[1] || '00').padStart(2, '0')}`;
 }
 
 function occursOnDate(task, targetDate) {
@@ -348,11 +361,11 @@ function occursOnDate(task, targetDate) {
 
 function deliveryTimeFor(task) {
     if (!task.hora) return fallbackDeliveryTime;
-    const [hours, minutes, seconds] = normalizeTime(task.hora).split(':').map(Number);
+    const [hours, minutes] = normalizeTime(task.hora).split(':').map(Number);
     const reminder = Number(task.reminderMinutes) || 0;
-    const scheduled = new Date(2000, 0, 1, hours, minutes, seconds);
+    const scheduled = new Date(2000, 0, 1, hours, minutes, 0);
     scheduled.setMinutes(scheduled.getMinutes() - reminder);
-    return `${String(scheduled.getHours()).padStart(2, '0')}:${String(scheduled.getMinutes()).padStart(2, '0')}:${String(scheduled.getSeconds()).padStart(2, '0')}`;
+    return `${String(scheduled.getHours()).padStart(2, '0')}:${String(scheduled.getMinutes()).padStart(2, '0')}`;
 }
 
 // ==========================================
@@ -443,9 +456,9 @@ async function sendEmail(destinatarios, subject, html) {
 // CONFIGURAR CRON JOB
 // ==========================================
 let cronJob = null;
-let fallbackDeliveryTime = '03:00:00';
+let fallbackDeliveryTime = '03:00';
 let reminderCheckRunning = false;
-const sentReminderKeys = new Set();
+const sentReminderKeys = new Set(storage.getSentReminderKeys());
 
 function setupDailyCron(hour = 3, minute = 0) {
     if (cronJob) {
@@ -453,8 +466,8 @@ function setupDailyCron(hour = 3, minute = 0) {
         console.log('⏹ Cron anterior detenido');
     }
 
-    fallbackDeliveryTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
-    const expression = '* * * * * *';
+    fallbackDeliveryTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    const expression = '* * * * *';
     console.log(`⏰ Recordatorios exactos activos; eventos sin hora y avisos anticipados salen a las ${fallbackDeliveryTime}`);
 
     cronJob = cron.schedule(expression, async () => {

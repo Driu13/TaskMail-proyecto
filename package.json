@@ -27,9 +27,9 @@
       "**/*",
       "!.taskmail-data/**/*",
       "!dist/**/*",
-      "!CUsersandre.claudeplans/**/*",
-      "!CUsersandre.claudeplansrustling-brewing-thunder-agent-a5117ed7fb88a1fd0.md",
-      "!CUsersandre.claudeplansrustling-brewing-thunder-agent-ae61bb53a5482c106.md"
+      "!config.json",
+      "!.idea/**/*",
+      "!**/*.md"
     ],
     "win": {
       "target": "nsis",
