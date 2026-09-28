@@ -5,6 +5,9 @@ node_modules/
 .taskmail-data/
 dist/
 
+# Credenciales de Microsoft Graph (tenant/client id/secret) — nunca al repo
+config.json
+
 # Archivos de sistema / editor
 .DS_Store
 Thumbs.db

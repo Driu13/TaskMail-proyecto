@@ -56,21 +56,13 @@ const Translations = {
         username: 'Username',
         emailPrefs: 'Email Preferences',
         addEmail: 'Add',
-        smtpTitle: 'Email Sending (SMTP)',
-        smtpHelp: 'Required so TaskMail can send reminder emails from this device. Saving new settings fully replaces whatever was configured before.',
-        smtpProviderLabel: 'Email provider',
-        smtpProviderGmail: 'Gmail',
-        smtpProviderOffice365: 'Outlook / Microsoft 365',
-        smtpProviderCustom: 'Other (custom SMTP)',
-        smtpHostLabel: 'SMTP server (host)',
-        smtpPortLabel: 'Outgoing port',
-        smtpEncryptionLabel: 'Encryption type',
-        smtpEncryptionStarttls: 'STARTTLS (recommended, usually port 587)',
-        smtpEncryptionSsl: 'SSL/TLS (usually port 465)',
-        smtpEncryptionNone: 'None (usually port 25, rarely used)',
-        smtpEmailLabel: 'Sender email address',
-        smtpPasswordLabel: 'Password',
-        smtpPasswordPlaceholder: 'Account or app password',
+        smtpTitle: 'Email Sending (Microsoft Graph API)',
+        smtpHelp: 'Required so TaskMail can send reminder emails from this device via Microsoft Graph. You need an Azure AD App Registration with application permission Mail.Send (admin consent granted). Saving new settings fully replaces whatever was configured before.',
+        smtpTenantIdLabel: 'Directory (tenant) ID',
+        smtpClientIdLabel: 'Application (client) ID',
+        smtpClientSecretLabel: 'Client secret',
+        smtpClientSecretPlaceholder: 'Client secret value',
+        smtpEmailLabel: 'Sender email address (mailbox)',
         smtpSave: 'Save & encrypt on this device',
         smtpTest: 'Send test email',
         smtpClear: 'Clear saved credentials',
@@ -161,21 +153,13 @@ const Translations = {
         username: 'Nombre de Usuario',
         emailPrefs: 'Preferencias de Email',
         addEmail: 'Agregar',
-        smtpTitle: 'Envío de Correo (SMTP)',
-        smtpHelp: 'Necesario para que TaskMail pueda enviar los correos de recordatorio desde este dispositivo. Guardar valores nuevos reemplaza por completo los anteriores.',
-        smtpProviderLabel: 'Proveedor de correo',
-        smtpProviderGmail: 'Gmail',
-        smtpProviderOffice365: 'Outlook / Microsoft 365',
-        smtpProviderCustom: 'Otro (SMTP personalizado)',
-        smtpHostLabel: 'Servidor SMTP (host)',
-        smtpPortLabel: 'Puerto de salida',
-        smtpEncryptionLabel: 'Tipo de cifrado',
-        smtpEncryptionStarttls: 'STARTTLS (recomendado, normalmente puerto 587)',
-        smtpEncryptionSsl: 'SSL/TLS (normalmente puerto 465)',
-        smtpEncryptionNone: 'Ninguno (normalmente puerto 25, poco usado)',
-        smtpEmailLabel: 'Correo remitente',
-        smtpPasswordLabel: 'Contraseña',
-        smtpPasswordPlaceholder: 'Contraseña de la cuenta o de aplicación',
+        smtpTitle: 'Envío de Correo (Microsoft Graph API)',
+        smtpHelp: 'Necesario para que TaskMail pueda enviar los correos de recordatorio desde este dispositivo mediante Microsoft Graph. Necesitas un registro de aplicación (App Registration) en Azure AD con el permiso de aplicación Mail.Send (con consentimiento del administrador). Guardar valores nuevos reemplaza por completo los anteriores.',
+        smtpTenantIdLabel: 'Tenant ID (directorio)',
+        smtpClientIdLabel: 'Client ID (aplicación)',
+        smtpClientSecretLabel: 'Client secret',
+        smtpClientSecretPlaceholder: 'Valor del secreto de cliente',
+        smtpEmailLabel: 'Correo remitente (buzón)',
         smtpSave: 'Guardar y cifrar en este dispositivo',
         smtpTest: 'Enviar correo de prueba',
         smtpClear: 'Borrar credenciales guardadas',
@@ -1095,22 +1079,12 @@ async function bulkPermanentDeleteTasks(taskIds) {
 // ==========================================
 // VIEW: SETTINGS
 // ==========================================
-const SMTP_PROVIDER_DEFAULTS = {
-    gmail: { host: 'smtp.gmail.com', port: 587, encryption: 'starttls' },
-    office365: { host: 'smtp.office365.com', port: 587, encryption: 'starttls' },
-    custom: { host: '', port: 587, encryption: 'starttls' }
-};
-const SMTP_ENCRYPTION_PORTS = { starttls: 587, ssl: 465, none: 25 };
-
 async function renderSettings(container) {
     const userData = await window.api.user.getData(State.currentUser.usuario);
     const settings = await window.api.settings.get();
-    const smtpStatus = await window.api.smtp.get();
+    const smtpStatus = await window.api.graph.get();
     const deliveryTime = `${String(settings?.notificationHour ?? 3).padStart(2, '0')}:${String(settings?.notificationMinute ?? 0).padStart(2, '0')}`;
     const emails = Array.isArray(userData?.emails) ? userData.emails : Array.isArray(userData?.destinatarios) ? userData.destinatarios : [];
-
-    const smtpProvider = smtpStatus?.provider || 'gmail';
-    const smtpEncryption = smtpStatus?.encryption || 'starttls';
 
     container.innerHTML = `
         <div class="settings-container">
@@ -1137,38 +1111,21 @@ async function renderSettings(container) {
                 </div>
                 <fieldset id="smtp-fields" disabled style="border: none; padding: 0; margin: 0; opacity: 0.55;">
                 <div class="field-group">
-                    <label>${t('smtpProviderLabel')}</label>
-                    <select id="smtp-provider">
-                        <option value="gmail" ${smtpProvider === 'gmail' ? 'selected' : ''}>${t('smtpProviderGmail')}</option>
-                        <option value="office365" ${smtpProvider === 'office365' ? 'selected' : ''}>${t('smtpProviderOffice365')}</option>
-                        <option value="custom" ${smtpProvider === 'custom' ? 'selected' : ''}>${t('smtpProviderCustom')}</option>
-                    </select>
+                    <label>${t('smtpTenantIdLabel')}</label>
+                    <input type="text" id="smtp-tenant-id" placeholder="00000000-0000-0000-0000-000000000000" value="${smtpStatus?.tenantId || ''}">
                 </div>
                 <div class="field-group">
-                    <label>${t('smtpHostLabel')}</label>
-                    <input type="text" id="smtp-host" placeholder="smtp.ejemplo.com" value="${smtpStatus?.host || ''}">
+                    <label>${t('smtpClientIdLabel')}</label>
+                    <input type="text" id="smtp-client-id" placeholder="00000000-0000-0000-0000-000000000000" value="${smtpStatus?.clientId || ''}">
                 </div>
-                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <div class="field-group" style="flex: 1; min-width: 120px;">
-                        <label>${t('smtpPortLabel')}</label>
-                        <input type="number" id="smtp-port" min="1" max="65535" value="${smtpStatus?.port || 587}">
-                    </div>
-                    <div class="field-group" style="flex: 2; min-width: 220px;">
-                        <label>${t('smtpEncryptionLabel')}</label>
-                        <select id="smtp-encryption">
-                            <option value="starttls" ${smtpEncryption === 'starttls' ? 'selected' : ''}>${t('smtpEncryptionStarttls')}</option>
-                            <option value="ssl" ${smtpEncryption === 'ssl' ? 'selected' : ''}>${t('smtpEncryptionSsl')}</option>
-                            <option value="none" ${smtpEncryption === 'none' ? 'selected' : ''}>${t('smtpEncryptionNone')}</option>
-                        </select>
-                    </div>
+                <div class="field-group password-container">
+                    <label>${t('smtpClientSecretLabel')}</label>
+                    <input type="password" id="smtp-client-secret" placeholder="${t('smtpClientSecretPlaceholder')}" autocomplete="off">
+                    <span class="toggle-password" id="toggle-smtp-client-secret" role="button" aria-label="Mostrar valor" data-visible="false"></span>
                 </div>
                 <div class="field-group">
                     <label>${t('smtpEmailLabel')}</label>
-                    <input type="email" id="smtp-user" placeholder="correo@dominio.com" value="${smtpStatus?.user || ''}">
-                </div>
-                <div class="field-group">
-                    <label>${t('smtpPasswordLabel')}</label>
-                    <input type="password" id="smtp-pass" placeholder="${t('smtpPasswordPlaceholder')}" autocomplete="off">
+                    <input type="email" id="smtp-sender-email" placeholder="correo@dominio.com" value="${smtpStatus?.senderEmail || ''}">
                 </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="btn-save" id="btn-save-smtp">${t('smtpSave')}</button>
@@ -1188,12 +1145,19 @@ async function renderSettings(container) {
                 <div class="field-group">
                     <label>${t('emailPrefs')}</label>
                     <div id="email-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
-                        ${emails.map(e => `<div style="font-size: 13px; color: var(--text-secondary)">${e}</div>`).join('') || '<div style="font-size: 13px; color: var(--text-secondary)">No emails configured</div>'}
+                        ${emails.length ? emails.map((e, idx) => `
+                            <div class="email-row" style="display: flex; align-items: center; gap: 6px;">
+                                <input type="email" class="email-edit-input" data-idx="${idx}" value="${e}" style="flex: 1; font-size: 13px;">
+                                <button type="button" class="btn-save btn-secondary email-save-btn" data-idx="${idx}" title="Guardar cambios" style="padding: 6px 10px;">💾</button>
+                                <button type="button" class="btn-save btn-secondary email-delete-btn" data-idx="${idx}" title="Eliminar correo" style="padding: 6px 10px;">🗑️</button>
+                            </div>
+                        `).join('') : '<div style="font-size: 13px; color: var(--text-secondary)">No emails configured</div>'}
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <input type="email" id="new-email" placeholder="Add new email...">
                         <button class="btn-save" id="btn-add-email">${t('addEmail')}</button>
                     </div>
+                    <p id="email-feedback" class="settings-feedback" role="status"></p>
                 </div>
             </div>
             <div class="settings-section">
@@ -1289,20 +1253,17 @@ async function renderSettings(container) {
     unlockBtn.addEventListener('click', unlockSmtp);
     unlockInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); unlockSmtp(); } });
 
-    // Al cambiar de proveedor, sugiere host/puerto/cifrado típicos —
-    // pero el usuario puede sobrescribirlos libremente después.
-    document.getElementById('smtp-provider').addEventListener('change', (e) => {
-        const defaults = SMTP_PROVIDER_DEFAULTS[e.target.value] || SMTP_PROVIDER_DEFAULTS.custom;
-        document.getElementById('smtp-host').value = defaults.host;
-        document.getElementById('smtp-port').value = defaults.port;
-        document.getElementById('smtp-encryption').value = defaults.encryption;
-    });
-
-    // Al cambiar el tipo de cifrado, sugiere el puerto típico asociado.
-    document.getElementById('smtp-encryption').addEventListener('change', (e) => {
-        const suggestedPort = SMTP_ENCRYPTION_PORTS[e.target.value];
-        if (suggestedPort) document.getElementById('smtp-port').value = suggestedPort;
-    });
+    // Ojito para mostrar/ocultar el valor del Client Secret
+    const clientSecretInput = document.getElementById('smtp-client-secret');
+    const clientSecretToggle = document.getElementById('toggle-smtp-client-secret');
+    if (clientSecretInput && clientSecretToggle) {
+        clientSecretToggle.addEventListener('click', () => {
+            const showing = clientSecretInput.type === 'text';
+            clientSecretInput.type = showing ? 'password' : 'text';
+            clientSecretToggle.dataset.visible = showing ? 'false' : 'true';
+            clientSecretToggle.setAttribute('aria-label', showing ? 'Mostrar valor' : 'Ocultar valor');
+        });
+    }
 
     const smtpFeedback = (message) => {
         const feedback = document.getElementById('smtp-feedback');
@@ -1313,30 +1274,24 @@ async function renderSettings(container) {
     };
 
     document.getElementById('btn-save-smtp').addEventListener('click', async () => {
-        const provider = document.getElementById('smtp-provider').value;
-        const host = document.getElementById('smtp-host').value.trim();
-        const port = document.getElementById('smtp-port').value;
-        const encryption = document.getElementById('smtp-encryption').value;
-        const user = document.getElementById('smtp-user').value.trim();
-        const pass = document.getElementById('smtp-pass').value.trim();
+        const tenantId = document.getElementById('smtp-tenant-id').value.trim();
+        const clientId = document.getElementById('smtp-client-id').value.trim();
+        const clientSecret = document.getElementById('smtp-client-secret').value.trim();
+        const senderEmail = document.getElementById('smtp-sender-email').value.trim();
         const statusEl = document.getElementById('smtp-status');
 
-        if (!user || !pass) {
-            smtpFeedback('Completa el correo y la contraseña.');
-            return;
-        }
-        if (!host) {
-            smtpFeedback('Completa el servidor SMTP (host).');
+        if (!tenantId || !clientId || !clientSecret || !senderEmail) {
+            smtpFeedback('Completa Tenant ID, Client ID, Client secret y el correo remitente.');
             return;
         }
 
-        const result = await window.api.smtp.set({ user, pass, provider, host, port, encryption });
+        const result = await window.api.graph.set({ tenantId, clientId, clientSecret, senderEmail });
         if (!result.success) {
             smtpFeedback('No se pudo guardar: ' + result.error);
             return;
         }
 
-        document.getElementById('smtp-pass').value = '';
+        document.getElementById('smtp-client-secret').value = '';
         if (statusEl) {
             statusEl.textContent = t('smtpConfigured');
             statusEl.style.color = 'var(--color-success)';
@@ -1345,8 +1300,12 @@ async function renderSettings(container) {
     });
 
     document.getElementById('btn-test-smtp').addEventListener('click', async () => {
-        const to = emails[0];
-        const result = await window.api.smtp.test(to);
+        if (!emails.length) {
+            smtpFeedback('Agrega al menos un correo en Perfil para poder enviar la prueba.');
+            return;
+        }
+        // Envía la prueba a TODOS los correos configurados, no solo al primero.
+        const result = await window.api.graph.test(emails);
         if (!result.success) {
             smtpFeedback('Error al enviar la prueba: ' + result.error);
             return;
@@ -1355,16 +1314,18 @@ async function renderSettings(container) {
     });
 
     document.getElementById('btn-clear-smtp').addEventListener('click', async () => {
-        if (!confirm('¿Borrar las credenciales de correo guardadas en este dispositivo?')) return;
+        if (!confirm('¿Borrar las credenciales de Microsoft Graph guardadas en este dispositivo?')) return;
 
-        const result = await window.api.smtp.clear();
+        const result = await window.api.graph.clear();
         if (!result.success) {
             smtpFeedback('No se pudo borrar: ' + result.error);
             return;
         }
 
-        document.getElementById('smtp-user').value = '';
-        document.getElementById('smtp-pass').value = '';
+        document.getElementById('smtp-tenant-id').value = '';
+        document.getElementById('smtp-client-id').value = '';
+        document.getElementById('smtp-client-secret').value = '';
+        document.getElementById('smtp-sender-email').value = '';
         const statusEl = document.getElementById('smtp-status');
         if (statusEl) {
             statusEl.textContent = t('smtpNotConfigured');
@@ -1384,6 +1345,48 @@ async function renderSettings(container) {
             return;
         }
         renderView('settings');
+    });
+
+    const emailFeedback = (message) => {
+        const feedback = document.getElementById('email-feedback');
+        if (!feedback) return;
+        feedback.textContent = message;
+        feedback.classList.add('is-visible');
+        window.setTimeout(() => feedback.classList.remove('is-visible'), 3200);
+    };
+
+    document.querySelectorAll('.email-save-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const idx = Number(btn.dataset.idx);
+            const input = document.querySelector(`.email-edit-input[data-idx="${idx}"]`);
+            const newValue = input.value.trim();
+            if (!newValue) {
+                emailFeedback('El correo no puede estar vacío.');
+                return;
+            }
+            const updatedEmails = [...emails];
+            updatedEmails[idx] = newValue;
+            const result = await window.api.user.updateData(State.currentUser.usuario, { emails: updatedEmails });
+            if (result && result.success === false) {
+                emailFeedback('No se pudo guardar: ' + result.error);
+                return;
+            }
+            renderView('settings');
+        });
+    });
+
+    document.querySelectorAll('.email-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const idx = Number(btn.dataset.idx);
+            if (!confirm('¿Eliminar este correo de la lista?')) return;
+            const updatedEmails = emails.filter((_, i) => i !== idx);
+            const result = await window.api.user.updateData(State.currentUser.usuario, { emails: updatedEmails });
+            if (result && result.success === false) {
+                emailFeedback('No se pudo eliminar: ' + result.error);
+                return;
+            }
+            renderView('settings');
+        });
     });
 
     document.getElementById('btn-export-data').addEventListener('click', async () => {

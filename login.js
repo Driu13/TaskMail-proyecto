@@ -1,5 +1,3 @@
-
-
 // ==========================================
 // DICCIONARIO Y LÓGICA DE TRADUCCIÓN EN LOGIN
 // ==========================================
@@ -289,27 +287,37 @@ document.getElementById('formularioRegistro').addEventListener('submit', async f
     if (errorU) { mostrarError('errorRegistroUsuario', errorU); return; }
     if (errorP) { mostrarError('errorRegistroPassword', errorP); return; }
 
+    const btn = document.querySelector('#formularioRegistro button');
+    const textOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Creando cuenta...';
+
     try {
         const result = await window.api.auth.register(usuario, password);
-        if (result.success) {
-            document.getElementById('formularioRegistro').reset();
-            actualizarValidadorVisual('');
-
-            const btn = document.querySelector('#formularioRegistro button');
-            const textOriginal = btn.textContent;
-            btn.textContent = '✅ Cuenta creada';
-            btn.style.background = 'rgba(46, 204, 113, 0.3)';
-            btn.style.borderColor = 'rgba(46, 204, 113, 0.6)';
-
-            setTimeout(() => {
-                btn.textContent = textOriginal;
-                btn.style.background = '';
-                btn.style.borderColor = '';
-            }, 3000);
-        } else {
+        if (!result.success) {
             mostrarError('errorRegistroUsuario', '❌ ' + result.error);
+            return;
         }
+
+        // Cuenta creada: inicia sesión automáticamente y entra directo a la app
+        const loginResult = await window.api.auth.login(usuario, password);
+        if (loginResult && loginResult.success) {
+            localStorage.setItem('sesionActual', JSON.stringify(loginResult.session));
+            document.body.classList.add('login-exiting');
+            window.setTimeout(() => { window.location.href = 'index.html'; }, 260);
+            return;
+        }
+
+        // Si por alguna razón el login automático falla, al menos deja la cuenta lista para entrar
+        document.getElementById('formularioRegistro').reset();
+        actualizarValidadorVisual('');
+        switchAuthMode('login');
+        document.getElementById('loginUsuario').value = usuario;
+        mostrarError('errorLoginGeneral', '✅ Cuenta creada con éxito. Inicia sesión.');
     } catch (error) {
         mostrarError('errorRegistroUsuario', '❌ Error al crear la cuenta.');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = textOriginal;
     }
 });

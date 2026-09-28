@@ -160,26 +160,26 @@ ipcMain.handle('settings:updateTime', async (event, { hour, minute }) => {
 ipcMain.handle('settings:get', () => storage.getSettings());
 
 // ==========================================
-// SMTP: configuración de correo desde la UI
+// MICROSOFT GRAPH: configuración de correo desde la UI
 // ==========================================
-ipcMain.handle('smtp:get', () => {
+ipcMain.handle('graph:get', () => {
     try {
-        return emailService.getSmtpStatus();
+        return emailService.getGraphStatus();
     } catch (error) {
-        return { configured: false, provider: 'gmail', user: null };
+        return { configured: false, tenantId: null, clientId: null, senderEmail: null };
     }
 });
 
-ipcMain.handle('smtp:set', async (event, { user, pass, provider, host, port, encryption }) => {
+ipcMain.handle('graph:set', async (event, { tenantId, clientId, clientSecret, senderEmail }) => {
     try {
-        const status = emailService.configureSmtp({ user, pass, provider, host, port, encryption });
+        const status = emailService.configureGraph({ tenantId, clientId, clientSecret, senderEmail });
         return { success: true, status };
     } catch (error) {
         return { success: false, error: error.message };
     }
 });
 
-ipcMain.handle('smtp:test', async (event, { to } = {}) => {
+ipcMain.handle('graph:test', async (event, { to } = {}) => {
     try {
         const result = await emailService.sendTestEmail(to);
         return { success: true, ...result };
@@ -188,9 +188,9 @@ ipcMain.handle('smtp:test', async (event, { to } = {}) => {
     }
 });
 
-ipcMain.handle('smtp:clear', () => {
+ipcMain.handle('graph:clear', () => {
     try {
-        const status = emailService.clearSmtp();
+        const status = emailService.clearGraph();
         return { success: true, status };
     } catch (error) {
         return { success: false, error: error.message };

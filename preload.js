@@ -24,11 +24,11 @@ contextBridge.exposeInMainWorld('api', {
         updateTime: (hour, minute) => ipcRenderer.invoke('settings:updateTime', { hour, minute }),
         updatePreferences: (preferences) => ipcRenderer.invoke('settings:updatePreferences', preferences),
     },
-    smtp: {
-        get: () => ipcRenderer.invoke('smtp:get'),
-        set: (data) => ipcRenderer.invoke('smtp:set', data),
-        test: (to) => ipcRenderer.invoke('smtp:test', { to }),
-        clear: () => ipcRenderer.invoke('smtp:clear'),
+    graph: {
+        get: () => ipcRenderer.invoke('graph:get'),
+        set: (data) => ipcRenderer.invoke('graph:set', data),
+        test: (to) => ipcRenderer.invoke('graph:test', { to }),
+        clear: () => ipcRenderer.invoke('graph:clear'),
     },
     session: {
         logout: () => ipcRenderer.send('session:logout'),

@@ -1,4 +1,3 @@
-const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
@@ -15,137 +14,175 @@ try {
 const CONFIG_FILE = path.join(__dirname, '../../config.json');
 
 // ==========================================
-// TRANSPORTER DE CORREO
+// ENVÍO DE CORREO VÍA MICROSOFT GRAPH API
+// (flujo de credenciales de cliente / app-only —
+//  el servicio envía correos sin un usuario logueado)
 // ==========================================
-const PROVIDER_DEFAULTS = {
-    gmail: { host: 'smtp.gmail.com', port: 587, encryption: 'starttls' },
-    office365: { host: 'smtp.office365.com', port: 587, encryption: 'starttls' },
-    custom: { host: '', port: 587, encryption: 'starttls' }
-};
+const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
 
-function encryptionToTransportOptions(encryption) {
-    switch (encryption) {
-        case 'ssl':      // SSL/TLS directo, normalmente puerto 465
-            return { secure: true };
-        case 'none':     // Sin cifrado, normalmente puerto 25
-            return { secure: false, ignoreTLS: true };
-        case 'starttls': // STARTTLS, normalmente puerto 587
-        default:
-            return { secure: false, requireTLS: true };
-    }
-}
+// Cache del token de acceso en memoria (evita pedir uno nuevo en cada correo)
+let cachedToken = null; // { accessToken, expiresAt }
 
-function getTransport() {
-    const config = readSmtpConfig();
-    const smtp = config.smtp || {};
-
-    return nodemailer.createTransport({
-        host: smtp.host,
-        port: Number(smtp.port) || 587,
-        ...encryptionToTransportOptions(smtp.encryption),
-        auth: {
-            user: smtp.auth ? smtp.auth.user : '',
-            pass: smtp.auth ? smtp.auth.pass : '' // Contraseña directamente en texto plano
-        }
-    });
-}
-
-function getFromEmail() {
-    const config = readSmtpConfig();
-    return config.smtp && config.smtp.auth ? config.smtp.auth.user : '';
-}
-
-function readSmtpConfig() {
+function readGraphConfig() {
     if (!fs.existsSync(CONFIG_FILE)) {
-        return { smtp: { provider: 'gmail', ...PROVIDER_DEFAULTS.gmail, auth: {} } };
+        return { graph: {} };
     }
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+    const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+    return { graph: raw.graph || {} };
 }
 
 // ==========================================
 // CONFIGURACIÓN DESDE LA UI
 // ==========================================
-function getSmtpStatus() {
+function getGraphStatus() {
     try {
-        const config = readSmtpConfig();
-        const smtp = config.smtp || {};
-        const auth = smtp.auth || {};
+        const { graph } = readGraphConfig();
         return {
-            configured: Boolean(auth.pass), // Verifica la contraseña en texto plano
-            provider: smtp.provider || 'gmail',
-            user: auth.user || null,
-            host: smtp.host || PROVIDER_DEFAULTS.gmail.host,
-            port: smtp.port || PROVIDER_DEFAULTS.gmail.port,
-            encryption: smtp.encryption || PROVIDER_DEFAULTS.gmail.encryption
+            configured: Boolean(graph.tenantId && graph.clientId && graph.clientSecret && graph.senderEmail),
+            tenantId: graph.tenantId || null,
+            clientId: graph.clientId || null,
+            senderEmail: graph.senderEmail || null
+            // clientSecret nunca se expone de vuelta a la UI
         };
     } catch (error) {
-        return { configured: false, provider: 'gmail', user: null, ...PROVIDER_DEFAULTS.gmail };
+        return { configured: false, tenantId: null, clientId: null, senderEmail: null };
     }
 }
 
-// Guarda las credenciales en texto plano sin cifrar
-function configureSmtp({ user, pass, provider, host, port, encryption }) {
-    const trimmedUser = String(user || '').trim();
-    const trimmedPass = String(pass || '').trim();
-    const normalizedProvider = String(provider || 'gmail').toLowerCase();
-    const defaults = PROVIDER_DEFAULTS[normalizedProvider] || PROVIDER_DEFAULTS.custom;
+// Guarda las credenciales de la app de Azure AD (App Registration)
+function configureGraph({ tenantId, clientId, clientSecret, senderEmail }) {
+    const trimmedTenant = String(tenantId || '').trim();
+    const trimmedClientId = String(clientId || '').trim();
+    const trimmedSecret = String(clientSecret || '').trim();
+    const trimmedSender = String(senderEmail || '').trim();
 
-    if (!trimmedUser) throw new Error('El correo es obligatorio');
-    if (!trimmedPass) throw new Error('La contraseña es obligatoria');
-
-    const finalHost = String(host || defaults.host || '').trim();
-    if (!finalHost) throw new Error('El servidor SMTP (host) es obligatorio');
-
-    const finalPort = Number(port) || defaults.port;
-    const finalEncryption = ['starttls', 'ssl', 'none'].includes(encryption) ? encryption : defaults.encryption;
+    if (!trimmedTenant) throw new Error('El Tenant ID es obligatorio');
+    if (!trimmedClientId) throw new Error('El Client ID es obligatorio');
+    if (!trimmedSecret) throw new Error('El Client Secret es obligatorio');
+    if (!trimmedSender) throw new Error('El correo remitente es obligatorio');
 
     const config = {
-        smtp: {
-            provider: normalizedProvider,
-            host: finalHost,
-            port: finalPort,
-            encryption: finalEncryption,
-            auth: { 
-                user: trimmedUser, 
-                pass: trimmedPass // Se guarda sin encriptar
-            }
+        graph: {
+            tenantId: trimmedTenant,
+            clientId: trimmedClientId,
+            clientSecret: trimmedSecret,
+            senderEmail: trimmedSender
         }
     };
 
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+    cachedToken = null; // fuerza a pedir un token nuevo con las credenciales actualizadas
 
-    return getSmtpStatus();
+    return getGraphStatus();
 }
 
 // Borra las credenciales guardadas
-function clearSmtp() {
-    const config = { smtp: { provider: 'gmail', ...PROVIDER_DEFAULTS.gmail, auth: {} } };
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
-    return getSmtpStatus();
+function clearGraph() {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ graph: {} }, null, 2), 'utf-8');
+    cachedToken = null;
+    return getGraphStatus();
 }
 
-// Envía un correo de prueba usando la configuración guardada
-async function sendTestEmail(destinatario) {
-    const fromEmail = getFromEmail();
-    const to = String(destinatario || fromEmail).trim();
-    const transport = getTransport();
+// Obtiene (y cachea) un token de acceso app-only vía client_credentials
+async function getAccessToken() {
+    const { graph } = readGraphConfig();
+    if (!graph.tenantId || !graph.clientId || !graph.clientSecret) {
+        throw new Error('Microsoft Graph no está configurado. Ve a Configuración → Envío de Correo.');
+    }
 
-    const info = await transport.sendMail({
-        from: `TaskMail <${fromEmail}>`,
-        to,
-        subject: '✅ TaskMail — Correo de prueba',
-        html: `
-            <div style="font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #18343a;">
-                <h2 style="margin: 0 0 8px;">¡Todo funciona! 🎉</h2>
-                <p style="margin: 0; color: #66777a;">
-                    Este es un correo de prueba enviado desde TaskMail para confirmar que la
-                    configuración SMTP de este dispositivo es correcta.
-                </p>
-            </div>
-        `
+    if (cachedToken && cachedToken.expiresAt > Date.now() + 30000) {
+        return cachedToken.accessToken;
+    }
+
+    const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(graph.tenantId)}/oauth2/v2.0/token`;
+    const body = new URLSearchParams({
+        client_id: graph.clientId,
+        client_secret: graph.clientSecret,
+        scope: GRAPH_SCOPE,
+        grant_type: 'client_credentials'
     });
 
-    return { to, messageId: info && info.messageId };
+    const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(`Error de autenticación con Microsoft Graph: ${data.error_description || data.error || response.status}`);
+    }
+
+    cachedToken = {
+        accessToken: data.access_token,
+        expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000
+    };
+    return cachedToken.accessToken;
+}
+
+// Envía un correo a través de Microsoft Graph (POST /users/{sender}/sendMail)
+async function sendViaGraph(destinatarios, subject, html) {
+    const { graph } = readGraphConfig();
+    const accessToken = await getAccessToken();
+
+    const message = {
+        message: {
+            subject,
+            body: { contentType: 'HTML', content: html },
+            toRecipients: destinatarios.map(email => ({ emailAddress: { address: email } }))
+        },
+        saveToSentItems: true
+    };
+
+    const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(graph.senderEmail)}/sendMail`;
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(message)
+    });
+
+    if (!response.ok) {
+        let errorMessage = `${response.status} ${response.statusText}`;
+        try {
+            const errorData = await response.json();
+            errorMessage = errorData.error && errorData.error.message ? errorData.error.message : errorMessage;
+        } catch (_) { /* respuesta sin cuerpo JSON */ }
+        throw new Error(`Error al enviar correo vía Microsoft Graph: ${errorMessage}`);
+    }
+
+    // sendMail no devuelve un id de mensaje directamente (202 Accepted, sin cuerpo)
+    return { accepted: destinatarios };
+}
+
+// Envía un correo de prueba usando la configuración guardada.
+// Acepta un solo correo o un arreglo de correos — antes solo mandaba
+// al primero de la lista aunque el usuario tuviera varios configurados.
+async function sendTestEmail(destinatario) {
+    const { graph } = readGraphConfig();
+
+    let recipients = Array.isArray(destinatario)
+        ? destinatario.map(e => String(e || '').trim()).filter(Boolean)
+        : (destinatario ? [String(destinatario).trim()] : []);
+
+    if (recipients.length === 0 && graph.senderEmail) {
+        recipients = [graph.senderEmail];
+    }
+    if (recipients.length === 0) throw new Error('No hay ningún destinatario para la prueba.');
+
+    const info = await sendViaGraph(recipients, '✅ TaskMail — Correo de prueba', `
+        <div style="font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #18343a;">
+            <h2 style="margin: 0 0 8px;">¡Todo funciona! 🎉</h2>
+            <p style="margin: 0; color: #66777a;">
+                Este es un correo de prueba enviado desde TaskMail vía Microsoft Graph API para
+                confirmar que la configuración de este dispositivo es correcta.
+            </p>
+        </div>
+    `);
+
+    return { to: recipients.join(', '), messageId: info && info.accepted ? info.accepted.join(', ') : null };
 }
 
 // ==========================================
@@ -189,23 +226,20 @@ async function runReminderCheck({ manual }) {
 
             if (eventosHoy.length === 0 && eventosMañana.length === 0 && eventosSemanaProx.length === 0) continue;
 
-            const transport = getTransport();
-            const fromEmail = getFromEmail();
-
             if (eventosHoy.length > 0) {
-                const enviado = await sendReminderOnce(transport, fromEmail, user, todayStr, eventosHoy,
+                const enviado = await sendReminderOnce(user, todayStr, eventosHoy,
                     '🗓️ Evento programado — TaskMail', 'HOY');
                 sentAnything = sentAnything || enviado;
             }
 
             if (eventosMañana.length > 0) {
-                const enviado = await sendReminderOnce(transport, fromEmail, user, tomorrowStr, eventosMañana,
+                const enviado = await sendReminderOnce(user, tomorrowStr, eventosMañana,
                     '⏰ Mañana: Recordatorio de eventos — TaskMail', 'MAÑANA');
                 sentAnything = sentAnything || enviado;
             }
 
             if (eventosSemanaProx.length > 0) {
-                const enviado = await sendReminderOnce(transport, fromEmail, user, nextWeekStr, eventosSemanaProx,
+                const enviado = await sendReminderOnce(user, nextWeekStr, eventosSemanaProx,
                     '📅 En 7 días: Próximos eventos — TaskMail', 'EN 7 DÍAS');
                 sentAnything = sentAnything || enviado;
             }
@@ -253,12 +287,12 @@ function showManualCheckErrorNotification(message) {
     }).show();
 }
 
-async function sendReminderOnce(transport, fromEmail, user, periodKey, events, subject, label) {
+async function sendReminderOnce(user, periodKey, events, subject, label) {
     const eventIds = events.map(event => event.id).sort().join(',');
     const key = `${user.username}:${periodKey}:${eventIds}`;
     if (sentReminderKeys.has(key)) return false;
 
-    const result = await sendEmail(transport, fromEmail, user.destinatarios, subject, buildEmailBody(label, events));
+    const result = await sendEmail(user.destinatarios, subject, buildEmailBody(label, events));
     if (result) {
         sentReminderKeys.add(key);
         showDesktopNotification(label, events, user.username);
@@ -395,15 +429,10 @@ function formatearFecha(fechaStr) {
 // ==========================================
 // ENVIAR CORREO
 // ==========================================
-async function sendEmail(transport, from, destinatarios, subject, html) {
+async function sendEmail(destinatarios, subject, html) {
     try {
-        const info = await transport.sendMail({
-            from: `TaskMail <${from}>`,
-            to: destinatarios.join(', '),
-            subject,
-            html
-        });
-        console.log(`✅ Email enviado: ${subject} → ${destinatarios.join(', ')}`);
+        const info = await sendViaGraph(destinatarios, subject, html);
+        console.log(`✅ Email enviado (Microsoft Graph): ${subject} → ${destinatarios.join(', ')}`);
         return info;
     } catch (err) {
         console.error(`❌ Error enviando email: ${err.message}`);
@@ -441,4 +470,4 @@ function setupDailyCron(hour = 3, minute = 0) {
     checkAndSendReminders();
 }
 
-module.exports = { setupDailyCron, checkAndSendReminders, checkRemindersNow, getSmtpStatus, configureSmtp, clearSmtp, sendTestEmail };
+module.exports = { setupDailyCron, checkAndSendReminders, checkRemindersNow, getGraphStatus, configureGraph, clearGraph, sendTestEmail, sendEmail };
