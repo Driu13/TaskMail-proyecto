@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('api', {
     },
     user: {
         getData: (username) => ipcRenderer.invoke('user:getData', username),
+        renameUsername: (username, newUsername) => ipcRenderer.invoke('user:renameUsername', { username, newUsername }),
         updateData: (username, userData) => ipcRenderer.invoke('user:updateData', { username, userData }),
         updateTask: (username, taskId, updatedFields) => ipcRenderer.invoke('user:updateTask', { username, taskId, updatedFields }),
         setTaskStatus: (username, taskId, status) => ipcRenderer.invoke('user:setTaskStatus', { username, taskId, status }),

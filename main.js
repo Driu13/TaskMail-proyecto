@@ -38,6 +38,15 @@ ipcMain.handle('auth:register', async (event, { username, password }) => {
     }
 });
 
+ipcMain.handle('user:renameUsername', async (event, { username, newUsername }) => {
+    try {
+        const { username: renamed } = storage.renameUser(username, newUsername);
+        return { success: true, username: renamed };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
 ipcMain.handle('user:getData', async (event, username) => {
     return storage.getDataForUser(username);
 });
