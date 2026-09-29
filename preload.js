@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('api', {
         login: (username, password) => ipcRenderer.invoke('auth:login', { username, password }),
         verifyPassword: (username, password) => ipcRenderer.invoke('auth:verifyPassword', { username, password }),
         register: (username, password) => ipcRenderer.invoke('auth:register', { username, password }),
+        adminLogin: (code) => ipcRenderer.invoke('auth:adminLogin', { code }),
     },
     user: {
         getData: (username) => ipcRenderer.invoke('user:getData', username),
@@ -26,10 +27,16 @@ contextBridge.exposeInMainWorld('api', {
         updatePreferences: (preferences) => ipcRenderer.invoke('settings:updatePreferences', preferences),
     },
     graph: {
-        get: () => ipcRenderer.invoke('graph:get'),
-        set: (data) => ipcRenderer.invoke('graph:set', data),
-        test: (to) => ipcRenderer.invoke('graph:test', { to }),
-        clear: () => ipcRenderer.invoke('graph:clear'),
+        get: (adminToken) => ipcRenderer.invoke('graph:get', { adminToken }),
+        set: (adminToken, data) => ipcRenderer.invoke('graph:set', { adminToken, ...data }),
+        test: (adminToken, to) => ipcRenderer.invoke('graph:test', { adminToken, to }),
+        clear: (adminToken) => ipcRenderer.invoke('graph:clear', { adminToken }),
+    },
+    smtp: {
+        get: (adminToken) => ipcRenderer.invoke('smtp:get', { adminToken }),
+        set: (adminToken, data) => ipcRenderer.invoke('smtp:set', { adminToken, ...data }),
+        test: (adminToken, to) => ipcRenderer.invoke('smtp:test', { adminToken, to }),
+        clear: (adminToken) => ipcRenderer.invoke('smtp:clear', { adminToken }),
     },
     session: {
         logout: () => ipcRenderer.send('session:logout'),

@@ -255,6 +255,7 @@ function normalizeUser(user) {
 // CONTRASEÑAS
 // ==========================================
 const PASSWORD_PREFIX = 'scrypt$';
+const DEFAULT_ADMIN_CODE = process.env.TASKMAIL_ADMIN_CODE || 'TaskMailAdmin2026';
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
     const derived = crypto.scryptSync(String(password), salt, 64).toString('hex');
@@ -273,6 +274,22 @@ function verifyPassword(password, stored) {
     const expected = Buffer.from(hash, 'hex');
     const derived = crypto.scryptSync(String(password), salt, expected.length);
     return crypto.timingSafeEqual(expected, derived);
+}
+
+function verifyAdminCode(code) {
+    const settings = getSettings();
+    const storedHash = settings.adminCodeHash;
+    if (storedHash) return verifyPassword(code, storedHash);
+    const supplied = Buffer.from(String(code));
+    const expected = Buffer.from(DEFAULT_ADMIN_CODE);
+    return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+}
+
+function updateAdminCode(code) {
+    if (typeof code !== 'string' || code.length < 10) {
+        throw new Error('El código de administrador debe tener al menos 10 caracteres.');
+    }
+    updateSettings({ adminCodeHash: hashPassword(code) });
 }
 
 function seedGuatemalaEvents() {
@@ -335,11 +352,7 @@ function renameUser(oldUsername, newUsername) {
 
     const data = readData();
     if (!data.users[oldUsername]) throw new Error('Usuario no encontrado');
-<<<<<<< HEAD
-    if (oldUsername === trimmedNew) return { username: trimmedNew }; // sin cambios
-=======
     if (oldUsername === trimmedNew) return { username: trimmedNew };
->>>>>>> 42f842c2e4980ed01d97605f30559cc61240e240
 
     if (data.users[trimmedNew]) throw new Error('Ese nombre de usuario ya está en uso');
 
@@ -572,6 +585,8 @@ module.exports = {
     getStats,
     getSettings,
     updateSettings,
+    verifyAdminCode,
+    updateAdminCode,
     getSentReminderKeys,
     addSentReminderKey,
     getAllUsersForEmail,

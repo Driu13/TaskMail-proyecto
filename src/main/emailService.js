@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 const storage = require('./storage');
 
 let electronApp = null;
@@ -35,13 +36,20 @@ const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
 // Cache del token de acceso en memoria (evita pedir uno nuevo en cada correo)
 let cachedToken = null; // { accessToken, expiresAt }
 
-function readGraphConfig() {
+function readMailConfig() {
     const configFile = getConfigFilePath();
-    if (!fs.existsSync(configFile)) {
-        return { graph: {} };
-    }
+    if (!fs.existsSync(configFile)) return { graph: {}, smtp: {} };
     const raw = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
-    return { graph: raw.graph || {} };
+    return { ...raw, graph: raw.graph || {}, smtp: raw.smtp || {} };
+}
+
+function writeMailConfig(config) {
+    fs.writeFileSync(getConfigFilePath(), JSON.stringify(config, null, 2), 'utf-8');
+}
+
+function readGraphConfig() {
+    const config = readMailConfig();
+    return { graph: config.graph };
 }
 
 // ==========================================
@@ -74,16 +82,14 @@ function configureGraph({ tenantId, clientId, clientSecret, senderEmail }) {
     if (!trimmedSecret) throw new Error('El Client Secret es obligatorio');
     if (!trimmedSender) throw new Error('El correo remitente es obligatorio');
 
-    const config = {
-        graph: {
+    const config = readMailConfig();
+    config.graph = {
             tenantId: trimmedTenant,
             clientId: trimmedClientId,
             clientSecret: trimmedSecret,
             senderEmail: trimmedSender
-        }
     };
-
-    fs.writeFileSync(getConfigFilePath(), JSON.stringify(config, null, 2), 'utf-8');
+    writeMailConfig(config);
     cachedToken = null; // fuerza a pedir un token nuevo con las credenciales actualizadas
 
     return getGraphStatus();
@@ -91,9 +97,44 @@ function configureGraph({ tenantId, clientId, clientSecret, senderEmail }) {
 
 // Borra las credenciales guardadas
 function clearGraph() {
-    fs.writeFileSync(getConfigFilePath(), JSON.stringify({ graph: {} }, null, 2), 'utf-8');
+    const config = readMailConfig();
+    config.graph = {};
+    writeMailConfig(config);
     cachedToken = null;
     return getGraphStatus();
+}
+
+function getSmtpStatus() {
+    try {
+        const { smtp } = readMailConfig();
+        return { configured: Boolean(smtp.host && smtp.port && smtp.user && smtp.password && smtp.senderEmail), host: smtp.host || null, port: smtp.port || null, secure: smtp.secure === true, senderEmail: smtp.senderEmail || null };
+    } catch (_) {
+        return { configured: false, host: null, port: null, secure: false, senderEmail: null };
+    }
+}
+
+function configureSmtp({ host, port, secure, user, password, senderEmail }) {
+    const smtp = { host: String(host || '').trim(), port: Number(port), secure: secure === true || String(secure) === 'true', user: String(user || '').trim(), password: String(password || ''), senderEmail: String(senderEmail || '').trim() };
+    if (!smtp.host || !Number.isInteger(smtp.port) || smtp.port < 1 || smtp.port > 65535 || !smtp.user || !smtp.password || !smtp.senderEmail) throw new Error('Completa servidor, puerto, usuario, contraseña y remitente SMTP.');
+    const config = readMailConfig();
+    config.smtp = smtp;
+    writeMailConfig(config);
+    return getSmtpStatus();
+}
+
+function clearSmtp() {
+    const config = readMailConfig();
+    config.smtp = {};
+    writeMailConfig(config);
+    return getSmtpStatus();
+}
+
+async function sendViaSmtp(destinatarios, subject, html) {
+    const { smtp } = readMailConfig();
+    if (!smtp.host || !smtp.port || !smtp.user || !smtp.password || !smtp.senderEmail) throw new Error('SMTP no está configurado.');
+    const transport = nodemailer.createTransport({ host: smtp.host, port: Number(smtp.port), secure: smtp.secure === true, auth: { user: smtp.user, pass: smtp.password } });
+    const info = await transport.sendMail({ from: smtp.senderEmail, to: destinatarios.join(', '), subject, html });
+    return { accepted: info.accepted || destinatarios, messageId: info.messageId };
 }
 
 // Obtiene (y cachea) un token de acceso app-only vía client_credentials
@@ -173,19 +214,21 @@ async function sendViaGraph(destinatarios, subject, html) {
 // Envía un correo de prueba usando la configuración guardada.
 // Acepta un solo correo o un arreglo de correos — antes solo mandaba
 // al primero de la lista aunque el usuario tuviera varios configurados.
-async function sendTestEmail(destinatario) {
+async function sendTestEmail(destinatario, provider = 'graph') {
     const { graph } = readGraphConfig();
 
     let recipients = Array.isArray(destinatario)
         ? destinatario.map(e => String(e || '').trim()).filter(Boolean)
         : (destinatario ? [String(destinatario).trim()] : []);
 
-    if (recipients.length === 0 && graph.senderEmail) {
-        recipients = [graph.senderEmail];
+    const smtpStatus = getSmtpStatus();
+    if (recipients.length === 0 && (provider === 'smtp' ? smtpStatus.senderEmail : graph.senderEmail)) {
+        recipients = [provider === 'smtp' ? smtpStatus.senderEmail : graph.senderEmail];
     }
     if (recipients.length === 0) throw new Error('No hay ningún destinatario para la prueba.');
 
-    const info = await sendViaGraph(recipients, '✅ TaskMail — Correo de prueba', `
+    const send = provider === 'smtp' ? sendViaSmtp : sendViaGraph;
+    const info = await send(recipients, '✅ TaskMail — Correo de prueba', `
         <div style="font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #18343a;">
             <h2 style="margin: 0 0 8px;">¡Todo funciona! 🎉</h2>
             <p style="margin: 0; color: #66777a;">
@@ -445,8 +488,12 @@ function formatearFecha(fechaStr) {
 // ==========================================
 async function sendEmail(destinatarios, subject, html) {
     try {
-        const info = await sendViaGraph(destinatarios, subject, html);
-        console.log(`✅ Email enviado (Microsoft Graph): ${subject} → ${destinatarios.join(', ')}`);
+        const graph = getGraphStatus();
+        const smtp = getSmtpStatus();
+        const provider = graph.configured ? 'graph' : (smtp.configured ? 'smtp' : null);
+        if (!provider) throw new Error('No hay un proveedor de correo configurado.');
+        const info = await (provider === 'smtp' ? sendViaSmtp : sendViaGraph)(destinatarios, subject, html);
+        console.log(`✅ Email enviado (${provider.toUpperCase()}): ${subject} → ${destinatarios.join(', ')}`);
         return info;
     } catch (err) {
         console.error(`❌ Error enviando email: ${err.message}`);
@@ -484,4 +531,4 @@ function setupDailyCron(hour = 3, minute = 0) {
     checkAndSendReminders();
 }
 
-module.exports = { setupDailyCron, checkAndSendReminders, checkRemindersNow, getGraphStatus, configureGraph, clearGraph, sendTestEmail };
+module.exports = { setupDailyCron, checkAndSendReminders, checkRemindersNow, getGraphStatus, configureGraph, clearGraph, getSmtpStatus, configureSmtp, clearSmtp, sendTestEmail };

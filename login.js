@@ -117,13 +117,20 @@ function togglePassword(id) {
 function switchAuthMode(mode) {
     const viewLogin = document.getElementById('view-login');
     const viewRegister = document.getElementById('view-register');
+    const viewAdmin = document.getElementById('view-admin');
 
     if (mode === 'register') {
         viewLogin.style.display = 'none';
         viewRegister.style.display = 'block';
+        viewAdmin.style.display = 'none';
+    } else if (mode === 'admin') {
+        viewLogin.style.display = 'none';
+        viewRegister.style.display = 'none';
+        viewAdmin.style.display = 'block';
     } else {
         viewLogin.style.display = 'block';
         viewRegister.style.display = 'none';
+        viewAdmin.style.display = 'none';
     }
 }
 
@@ -293,5 +300,32 @@ document.getElementById('formularioRegistro').addEventListener('submit', async f
     } finally {
         btn.disabled = false;
         btn.textContent = textOriginal;
+    }
+});
+
+document.getElementById('admin-access-link').addEventListener('click', (event) => {
+    event.preventDefault();
+    switchAuthMode('admin');
+    document.getElementById('adminCode').focus();
+});
+
+document.getElementById('back-to-login-link').addEventListener('click', (event) => {
+    event.preventDefault();
+    switchAuthMode('login');
+});
+
+document.getElementById('formularioAdmin').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const code = document.getElementById('adminCode').value;
+    const error = document.getElementById('errorAdminCode');
+    error.textContent = '';
+    if (!code) { error.textContent = 'Ingresa el código de administrador.'; return; }
+    try {
+        const result = await window.api.auth.adminLogin(code);
+        if (!result.success) { error.textContent = '❌ ' + result.error; return; }
+        localStorage.setItem('sesionActual', JSON.stringify(result.session));
+        window.location.href = 'index.html';
+    } catch (_) {
+        error.textContent = '❌ No se pudo validar el código.';
     }
 });

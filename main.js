@@ -6,6 +6,12 @@ const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen, dialog } =
 const path = require('path');
 const storage = require('./src/main/storage');
 const emailService = require('./src/main/emailService');
+const crypto = require('crypto');
+const adminTokens = new Set();
+
+function requireAdminToken(token) {
+    if (!token || !adminTokens.has(token)) throw new Error('Sesión de administrador requerida.');
+}
 
 // ==========================================
 // IPC HANDLERS - REGISTERED IMMEDIATELY
@@ -36,6 +42,15 @@ ipcMain.handle('auth:register', async (event, { username, password }) => {
     } catch (error) {
         return { success: false, error: error.message };
     }
+});
+
+ipcMain.handle('auth:adminLogin', async (event, { code }) => {
+    if (!storage.verifyAdminCode(String(code || ''))) {
+        return { success: false, error: 'Código de administrador incorrecto' };
+    }
+    const adminToken = crypto.randomBytes(32).toString('hex');
+    adminTokens.add(adminToken);
+    return { success: true, session: { usuario: 'Administrador', rol: 'admin', adminToken } };
 });
 
 ipcMain.handle('user:renameUsername', async (event, { username, newUsername }) => {
@@ -171,16 +186,18 @@ ipcMain.handle('settings:get', () => storage.getSettings());
 // ==========================================
 // MICROSOFT GRAPH: configuración de correo desde la UI
 // ==========================================
-ipcMain.handle('graph:get', () => {
+ipcMain.handle('graph:get', (event, { adminToken } = {}) => {
     try {
+        requireAdminToken(adminToken);
         return emailService.getGraphStatus();
     } catch (error) {
         return { configured: false, tenantId: null, clientId: null, senderEmail: null };
     }
 });
 
-ipcMain.handle('graph:set', async (event, { tenantId, clientId, clientSecret, senderEmail }) => {
+ipcMain.handle('graph:set', async (event, { adminToken, tenantId, clientId, clientSecret, senderEmail }) => {
     try {
+        requireAdminToken(adminToken);
         const status = emailService.configureGraph({ tenantId, clientId, clientSecret, senderEmail });
         return { success: true, status };
     } catch (error) {
@@ -188,8 +205,9 @@ ipcMain.handle('graph:set', async (event, { tenantId, clientId, clientSecret, se
     }
 });
 
-ipcMain.handle('graph:test', async (event, { to } = {}) => {
+ipcMain.handle('graph:test', async (event, { adminToken, to } = {}) => {
     try {
+        requireAdminToken(adminToken);
         const result = await emailService.sendTestEmail(to);
         return { success: true, ...result };
     } catch (error) {
@@ -197,13 +215,29 @@ ipcMain.handle('graph:test', async (event, { to } = {}) => {
     }
 });
 
-ipcMain.handle('graph:clear', () => {
+ipcMain.handle('graph:clear', (event, { adminToken } = {}) => {
     try {
+        requireAdminToken(adminToken);
         const status = emailService.clearGraph();
         return { success: true, status };
     } catch (error) {
         return { success: false, error: error.message };
     }
+});
+
+for (const [channel, method] of [['smtp:get', 'getSmtpStatus'], ['smtp:clear', 'clearSmtp']]) {
+    ipcMain.handle(channel, (event, { adminToken } = {}) => {
+        try { requireAdminToken(adminToken); return { success: true, status: emailService[method]() }; }
+        catch (error) { return { success: false, error: error.message }; }
+    });
+}
+ipcMain.handle('smtp:set', async (event, { adminToken, ...config }) => {
+    try { requireAdminToken(adminToken); return { success: true, status: emailService.configureSmtp(config) }; }
+    catch (error) { return { success: false, error: error.message }; }
+});
+ipcMain.handle('smtp:test', async (event, { adminToken, to } = {}) => {
+    try { requireAdminToken(adminToken); return { success: true, ...(await emailService.sendTestEmail(to, 'smtp')) }; }
+    catch (error) { return { success: false, error: error.message }; }
 });
 
 ipcMain.handle('settings:updatePreferences', (event, preferences) => {

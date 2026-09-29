@@ -287,7 +287,14 @@ async function initApp() {
         State.currentUser = session;
         const preferences = await window.api.settings.get();
         applyTheme(preferences.theme);
-        await loadUserData();
+        const isAdmin = State.currentUser.rol === 'admin' && State.currentUser.adminToken;
+        if (isAdmin) {
+            State.tasks = [];
+            State.userProfile = { exists: true, tasks: [], deletedTasks: [], emails: [] };
+            State.currentView = 'settings';
+        } else {
+            await loadUserData();
+        }
 
         if (!State.userProfile || !State.userProfile.exists) {
             localStorage.removeItem('sesionActual');
@@ -1080,9 +1087,14 @@ async function bulkPermanentDeleteTasks(taskIds) {
 // VIEW: SETTINGS
 // ==========================================
 async function renderSettings(container) {
-    const userData = await window.api.user.getData(State.currentUser.usuario);
+    const isAdmin = State.currentUser.rol === 'admin' && State.currentUser.adminToken;
+    const adminToken = State.currentUser.adminToken;
+    const userData = isAdmin ? null : await window.api.user.getData(State.currentUser.usuario);
     const settings = await window.api.settings.get();
-    const smtpStatus = await window.api.graph.get();
+    const graphResponse = isAdmin ? await window.api.graph.get(adminToken) : { configured: false };
+    const smtpResponse = isAdmin ? await window.api.smtp.get(adminToken) : { configured: false };
+    const smtpStatus = graphResponse.status || graphResponse;
+    const smtpConfig = smtpResponse.status || smtpResponse;
     const deliveryTime = `${String(settings?.notificationHour ?? 3).padStart(2, '0')}:${String(settings?.notificationMinute ?? 0).padStart(2, '0')}`;
     const emails = Array.isArray(userData?.emails) ? userData.emails : Array.isArray(userData?.destinatarios) ? userData.destinatarios : [];
 
@@ -1098,9 +1110,10 @@ async function renderSettings(container) {
                     </div>
                 </div>
             </div>
-            <div class="settings-section">
+            <div class="settings-section" style="display: ${isAdmin ? 'block' : 'none'};">
                 <h2>${t('smtpTitle')}</h2>
-                <p class="settings-help">${t('smtpHelp')}</p>
+                <p class="settings-help">${isAdmin ? 'Elige Microsoft Graph API o SMTP. Las credenciales se guardan solo en este dispositivo.' : 'La configuración de envío está reservada al administrador.'}</p>
+                <div class="field-group"><label>Proveedor de correo</label><select id="mail-provider" ${isAdmin ? '' : 'disabled'}><option value="graph">Microsoft Graph API</option><option value="smtp">SMTP</option></select></div>
                 <div class="field-group" id="smtp-lock-row" style="background: rgba(227, 101, 80, 0.08); border: 1px solid rgba(227, 101, 80, 0.25); border-radius: var(--radius-sm); padding: 14px;">
                     <label>🔒 Confirma tu contraseña de TaskMail para editar estos ajustes</label>
                     <div style="display: flex; gap: 8px;">
@@ -1109,7 +1122,7 @@ async function renderSettings(container) {
                     </div>
                     <span class="field-error" id="smtp-unlock-error"></span>
                 </div>
-                <fieldset id="smtp-fields" disabled style="border: none; padding: 0; margin: 0; opacity: 0.55;">
+                <fieldset id="smtp-fields" ${isAdmin ? '' : 'disabled'} style="border: none; padding: 0; margin: 0; opacity: ${isAdmin ? '1' : '0.55'};">
                 <div class="field-group">
                     <label>${t('smtpTenantIdLabel')}</label>
                     <input type="text" id="smtp-tenant-id" placeholder="00000000-0000-0000-0000-000000000000" value="${smtpStatus?.tenantId || ''}">
@@ -1132,6 +1145,13 @@ async function renderSettings(container) {
                     <button class="btn-save btn-secondary" id="btn-test-smtp">${t('smtpTest')}</button>
                     <button class="btn-save btn-secondary" id="btn-clear-smtp">${t('smtpClear')}</button>
                 </div>
+                </fieldset>
+                <fieldset id="smtp-provider-fields" disabled style="border: none; padding: 0; margin: 0; opacity: 0.55; display: none;">
+                    <div class="field-group"><label>Servidor SMTP</label><input type="text" id="smtp-host" placeholder="smtp.ejemplo.com" value="${smtpConfig?.host || ''}"></div>
+                    <div class="modal-grid-two"><div class="field-group"><label>Puerto</label><input type="number" id="smtp-port" min="1" max="65535" value="${smtpConfig?.port || 587}"></div><div class="field-group"><label>Seguridad</label><select id="smtp-secure"><option value="false" ${smtpConfig?.secure ? '' : 'selected'}>STARTTLS / TLS</option><option value="true" ${smtpConfig?.secure ? 'selected' : ''}>SSL (puerto 465)</option></select></div></div>
+                    <div class="field-group"><label>Usuario SMTP</label><input type="text" id="smtp-user" value="${smtpConfig?.user || ''}" autocomplete="off"></div>
+                    <div class="field-group password-container"><label>Contraseña SMTP</label><input type="password" id="smtp-password" autocomplete="off"></div>
+                    <div class="field-group"><label>Correo remitente</label><input type="email" id="smtp-sender-email" value="${smtpConfig?.senderEmail || ''}"></div>
                 </fieldset>
                 <p id="smtp-status" class="settings-help" style="color: ${smtpStatus?.configured ? 'var(--color-success)' : '#e36550'};">${smtpStatus?.configured ? t('smtpConfigured') : t('smtpNotConfigured')}</p>
                 <p id="smtp-feedback" class="settings-feedback" role="status"></p>
@@ -1194,8 +1214,12 @@ async function renderSettings(container) {
     document.getElementById('btn-save-time').addEventListener('click', async () => {
         const time = document.getElementById('setting-time').value;
         const [hour, minute] = time.split(':');
-        await window.api.settings.updateTime(hour, minute);
-        alert('Time updated successfully!');
+        const result = await window.api.settings.updateTime(hour, minute);
+        if (result?.success) {
+            alert(State.language === 'es' ? 'Hora de recordatorios actualizada.' : 'Reminder time updated.');
+        } else {
+            alert((State.language === 'es' ? 'No se pudo actualizar la hora: ' : 'Could not update the time: ') + (result?.error || ''));
+        }
     });
 
     const savePreferences = async () => {
@@ -1223,10 +1247,27 @@ async function renderSettings(container) {
     // Los campos SMTP empiezan bloqueados; solo se habilitan si se confirma
     // la contraseña de la cuenta de TaskMail (no la del correo SMTP).
     const smtpFields = document.getElementById('smtp-fields');
+    const smtpProviderFields = document.getElementById('smtp-provider-fields');
+    const providerSelect = document.getElementById('mail-provider');
     const unlockBtn = document.getElementById('btn-unlock-smtp');
     const unlockInput = document.getElementById('smtp-unlock-pass');
     const unlockRow = document.getElementById('smtp-lock-row');
     const unlockError = document.getElementById('smtp-unlock-error');
+
+    const updateMailProvider = () => {
+        const useSmtp = providerSelect.value === 'smtp';
+        smtpFields.style.display = useSmtp ? 'none' : 'block';
+        smtpProviderFields.style.display = useSmtp ? 'block' : 'none';
+        smtpFields.disabled = useSmtp || !isAdmin;
+        smtpProviderFields.disabled = !useSmtp || !isAdmin;
+        smtpFields.style.opacity = smtpFields.disabled ? '0.55' : '1';
+        smtpProviderFields.style.opacity = smtpProviderFields.disabled ? '0.55' : '1';
+    };
+    providerSelect.addEventListener('change', updateMailProvider);
+    if (isAdmin) {
+        unlockRow.style.display = 'none';
+        updateMailProvider();
+    }
 
     const unlockSmtp = async () => {
         const pass = unlockInput.value;
@@ -1254,8 +1295,10 @@ async function renderSettings(container) {
             unlockBtn.textContent = 'Desbloquear';
         }
     };
-    unlockBtn.addEventListener('click', unlockSmtp);
-    unlockInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); unlockSmtp(); } });
+    if (!isAdmin) {
+        unlockBtn.addEventListener('click', unlockSmtp);
+        unlockInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); unlockSmtp(); } });
+    }
 
     // Ojito para mostrar/ocultar el valor del Client Secret
     const clientSecretInput = document.getElementById('smtp-client-secret');
@@ -1278,6 +1321,21 @@ async function renderSettings(container) {
     };
 
     document.getElementById('btn-save-smtp').addEventListener('click', async () => {
+        if (!isAdmin) { smtpFeedback('Ingresa usando el código de administrador para modificar esta configuración.'); return; }
+        if (providerSelect.value === 'smtp') {
+            const result = await window.api.smtp.set(adminToken, {
+                host: document.getElementById('smtp-host').value.trim(),
+                port: document.getElementById('smtp-port').value,
+                secure: document.getElementById('smtp-secure').value === 'true',
+                user: document.getElementById('smtp-user').value.trim(),
+                password: document.getElementById('smtp-password').value,
+                senderEmail: document.getElementById('smtp-sender-email').value.trim()
+            });
+            if (!result.success) { smtpFeedback('No se pudo guardar: ' + result.error); return; }
+            document.getElementById('smtp-password').value = '';
+            smtpFeedback('Configuración SMTP guardada.');
+            return;
+        }
         const tenantId = document.getElementById('smtp-tenant-id').value.trim();
         const clientId = document.getElementById('smtp-client-id').value.trim();
         const clientSecret = document.getElementById('smtp-client-secret').value.trim();
@@ -1289,7 +1347,7 @@ async function renderSettings(container) {
             return;
         }
 
-        const result = await window.api.graph.set({ tenantId, clientId, clientSecret, senderEmail });
+        const result = await window.api.graph.set(adminToken, { tenantId, clientId, clientSecret, senderEmail });
         if (!result.success) {
             smtpFeedback('No se pudo guardar: ' + result.error);
             return;
@@ -1304,12 +1362,15 @@ async function renderSettings(container) {
     });
 
     document.getElementById('btn-test-smtp').addEventListener('click', async () => {
-        if (!emails.length) {
+        if (!isAdmin) { smtpFeedback('Ingresa usando el código de administrador para enviar pruebas.'); return; }
+        if (!emails.length && providerSelect.value === 'graph') {
             smtpFeedback('Agrega al menos un correo en Perfil para poder enviar la prueba.');
             return;
         }
         // Envía la prueba a TODOS los correos configurados, no solo al primero.
-        const result = await window.api.graph.test(emails);
+        const result = providerSelect.value === 'smtp'
+            ? await window.api.smtp.test(adminToken, emails)
+            : await window.api.graph.test(adminToken, emails);
         if (!result.success) {
             smtpFeedback('Error al enviar la prueba: ' + result.error);
             return;
@@ -1318,9 +1379,12 @@ async function renderSettings(container) {
     });
 
     document.getElementById('btn-clear-smtp').addEventListener('click', async () => {
+        if (!isAdmin) { smtpFeedback('Ingresa usando el código de administrador para borrar la configuración.'); return; }
         if (!confirm('¿Borrar las credenciales de Microsoft Graph guardadas en este dispositivo?')) return;
 
-        const result = await window.api.graph.clear();
+        const result = providerSelect.value === 'smtp'
+            ? await window.api.smtp.clear(adminToken)
+            : await window.api.graph.clear(adminToken);
         if (!result.success) {
             smtpFeedback('No se pudo borrar: ' + result.error);
             return;
@@ -1330,6 +1394,11 @@ async function renderSettings(container) {
         document.getElementById('smtp-client-id').value = '';
         document.getElementById('smtp-client-secret').value = '';
         document.getElementById('smtp-sender-email').value = '';
+        if (providerSelect.value === 'smtp') {
+            document.getElementById('smtp-host').value = '';
+            document.getElementById('smtp-user').value = '';
+            document.getElementById('smtp-password').value = '';
+        }
         const statusEl = document.getElementById('smtp-status');
         if (statusEl) {
             statusEl.textContent = t('smtpNotConfigured');
@@ -1374,8 +1443,16 @@ async function renderSettings(container) {
     });
 
     document.getElementById('btn-add-email').addEventListener('click', async () => {
-        const email = document.getElementById('new-email').value;
+        const email = document.getElementById('new-email').value.trim();
         if (!email) return;
+        if (!/^\S+@\S+\.\S+$/.test(email)) {
+            emailFeedback('Ingresa un correo válido.');
+            return;
+        }
+        if (emails.some(existing => existing.toLowerCase() === email.toLowerCase())) {
+            emailFeedback('Ese correo ya está agregado.');
+            return;
+        }
 
         const updatedEmails = [...emails, email];
         const result = await window.api.user.updateData(State.currentUser.usuario, { emails: updatedEmails });
@@ -1383,38 +1460,6 @@ async function renderSettings(container) {
             alert('No se pudo guardar el correo: ' + result.error);
             return;
         }
-        renderView('settings');
-    });
-
-    document.getElementById('btn-save-username').addEventListener('click', async () => {
-        const input = document.getElementById('profile-username');
-        const errorEl = document.getElementById('username-error');
-        const newUsername = input.value.trim();
-        errorEl.textContent = '';
-
-        if (newUsername === State.currentUser.usuario) return;
-
-        if (!/^[a-zA-Z0-9_]{4,20}$/.test(newUsername)) {
-            errorEl.textContent = 'Debe tener 4-20 caracteres: letras, números o guion bajo.';
-            return;
-        }
-
-        const btn = document.getElementById('btn-save-username');
-        btn.disabled = true;
-
-        const result = await window.api.user.renameUsername(State.currentUser.usuario, newUsername);
-        btn.disabled = false;
-
-        if (!result.success) {
-            errorEl.textContent = result.error;
-            return;
-        }
-
-        // Actualiza el usuario en memoria y en la sesión guardada
-        State.currentUser.usuario = result.username;
-        localStorage.setItem('sesionActual', JSON.stringify(State.currentUser));
-        await loadUserData();
-        updateUserProfile();
         renderView('settings');
     });
 

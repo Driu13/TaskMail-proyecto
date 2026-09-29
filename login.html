@@ -69,6 +69,25 @@
                     <span data-i18n="noAccount">Don't have an account?</span>
                     <a href="#" onclick="switchAuthMode('register')" data-i18n="createOne">Create one</a>
                 </div>
+
+                <div class="auth-footer" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
+                    <a href="#" id="admin-access-link">Código de administrador</a>
+                </div>
+            </div>
+
+            <div id="view-admin" class="auth-view" style="display: none;">
+                <h2>Acceso de administrador</h2>
+                <p class="auth-subtitle">Ingresa el código para configurar el envío de correos.</p>
+                <form id="formularioAdmin" novalidate>
+                    <div class="field-group password-container">
+                        <label>Código de administrador</label>
+                        <input type="password" id="adminCode" placeholder="Ingresa el código" autocomplete="off">
+                        <span class="toggle-password" onclick="togglePassword('adminCode')" role="button" aria-label="Mostrar código" data-visible="false"></span>
+                        <span class="field-error" id="errorAdminCode"></span>
+                    </div>
+                    <button type="submit" class="btn-primary">Entrar a configuración</button>
+                </form>
+                <div class="auth-footer"><a href="#" id="back-to-login-link">Volver a iniciar sesión</a></div>
             </div>
 
             <!-- REGISTER VIEW -->
