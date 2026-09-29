@@ -14,25 +14,14 @@ try {
     DesktopNotification = null;
 }
 
-<<<<<<< HEAD
-// El archivo con las credenciales de Microsoft Graph vive en la carpeta de
-// datos de usuario del sistema (p. ej. C:\Users\<tú>\AppData\Roaming\TaskMail),
-// NUNCA dentro de la carpeta del proyecto/código fuente. Solo se crea cuando
-// alguien lo configura desde Configuración → Envío de Correo en la interfaz;
-// no existe ningún archivo de plantilla que se pueda editar a mano.
-=======
 // Las credenciales de Microsoft Graph viven en la carpeta de datos de usuario
 // del sistema (p. ej. C:\Users\<tú>\AppData\Roaming\TaskMail), nunca dentro de
 // la carpeta del proyecto.
->>>>>>> 42f842c2e4980ed01d97605f30559cc61240e240
 function getConfigFilePath() {
     if (electronApp && typeof electronApp.getPath === 'function') {
         return path.join(electronApp.getPath('userData'), 'config.json');
     }
-<<<<<<< HEAD
     // Solo como respaldo si este archivo llegara a correr fuera de Electron.
-=======
->>>>>>> 42f842c2e4980ed01d97605f30559cc61240e240
     return path.join(__dirname, '../../config.json');
 }
 
