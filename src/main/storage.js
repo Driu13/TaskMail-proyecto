@@ -252,18 +252,31 @@ function normalizeUser(user) {
 
 
 // ==========================================
-// API PÚBLICA
+// CONTRASEÑAS
 // ==========================================
-function validateUser(username, password) {
-    const data = readData();
-    const user = data.users[username];
-    return user && user.password === password;
+const PASSWORD_PREFIX = 'scrypt$';
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+    const derived = crypto.scryptSync(String(password), salt, 64).toString('hex');
+    return `${PASSWORD_PREFIX}${salt}$${derived}`;
 }
 
-function createUser(username, password) {
-    const data = readData();
-    if (data.users[username]) throw new Error('El usuario ya existe');
-    const initialTasks = EVENTOS_GUATEMALA.map(e => normalizeTask({
+function verifyPassword(password, stored) {
+    if (typeof stored !== 'string' || stored.length === 0) return false;
+
+    // Registros antiguos guardaban la contraseña en texto plano.
+    if (!stored.startsWith(PASSWORD_PREFIX)) return stored === String(password);
+
+    const [, salt, hash] = stored.split('$');
+    if (!salt || !hash) return false;
+
+    const expected = Buffer.from(hash, 'hex');
+    const derived = crypto.scryptSync(String(password), salt, expected.length);
+    return crypto.timingSafeEqual(expected, derived);
+}
+
+function seedGuatemalaEvents() {
+    return EVENTOS_GUATEMALA.map(e => normalizeTask({
         ...e,
         title: e.nombre,
         date: e.fecha,
@@ -272,10 +285,33 @@ function createUser(username, password) {
         status: 'todo',
         category: e.tipo || 'general'
     }));
+}
+
+// ==========================================
+// API PÚBLICA
+// ==========================================
+function validateUser(username, password) {
+    const data = readData();
+    const user = data.users[username];
+    if (!user || !verifyPassword(password, user.password)) return false;
+
+    if (!String(user.password).startsWith(PASSWORD_PREFIX)) {
+        user.password = hashPassword(password);
+        writeData(data);
+    }
+
+    return true;
+}
+
+function createUser(username, password) {
+    const data = readData();
+    if (data.users[username]) throw new Error('El usuario ya existe');
+    const initialTasks = seedGuatemalaEvents();
 
     data.users[username] = {
-        password,
+        password: hashPassword(password),
         rol: 'usuario',
+        seeded: true,
         tasks: initialTasks,
         tareas: initialTasks,
         deletedTasks: [],
@@ -299,7 +335,11 @@ function renameUser(oldUsername, newUsername) {
 
     const data = readData();
     if (!data.users[oldUsername]) throw new Error('Usuario no encontrado');
+<<<<<<< HEAD
     if (oldUsername === trimmedNew) return { username: trimmedNew }; // sin cambios
+=======
+    if (oldUsername === trimmedNew) return { username: trimmedNew };
+>>>>>>> 42f842c2e4980ed01d97605f30559cc61240e240
 
     if (data.users[trimmedNew]) throw new Error('Ese nombre de usuario ya está en uso');
 
@@ -318,19 +358,16 @@ function getDataForUser(username) {
 
     const normalizedUser = syncUserAliases(user);
 
-    if (normalizedUser.tasks.length === 0) {
-        const fallbackTasks = (EVENTOS_GUATEMALA.map(e => normalizeTask({
-            ...e,
-            title: e.nombre,
-            date: e.fecha,
-            description: e.descripcion,
-            priority: 'medium',
-            status: 'todo',
-            category: e.tipo || 'general'
-        }))); 
-        normalizedUser.tasks = fallbackTasks;
-        normalizedUser.tareas = fallbackTasks;
-        console.log(`✅ Eventos migrados para: ${username}`);
+    // Los eventos de Guatemala se cargan una sola vez por usuario: si los borra
+    // todos, la lista se queda vacía en lugar de volver a llenarse.
+    if (!normalizedUser.seeded) {
+        if (normalizedUser.tasks.length === 0 && (normalizedUser.deletedTasks || []).length === 0) {
+            const fallbackTasks = seedGuatemalaEvents();
+            normalizedUser.tasks = fallbackTasks;
+            normalizedUser.tareas = fallbackTasks;
+            console.log(`✅ Eventos migrados para: ${username}`);
+        }
+        normalizedUser.seeded = true;
     }
 
     data.users[username] = syncUserAliases(normalizedUser);
@@ -487,6 +524,26 @@ function updateSettings(newSettings) {
     writeData(data);
 }
 
+// ==========================================
+// RECORDATORIOS YA ENVIADOS
+// Persistidos para no reenviar el mismo aviso tras reiniciar la app.
+// ==========================================
+const MAX_SENT_REMINDER_KEYS = 500;
+
+function getSentReminderKeys() {
+    const data = readData();
+    return Array.isArray(data.sentReminders) ? data.sentReminders : [];
+}
+
+function addSentReminderKey(key) {
+    const data = readData();
+    const keys = Array.isArray(data.sentReminders) ? data.sentReminders : [];
+    if (keys.includes(key)) return;
+    keys.push(key);
+    data.sentReminders = keys.slice(-MAX_SENT_REMINDER_KEYS);
+    writeData(data);
+}
+
 function getAllUsersForEmail() {
     const data = readData();
     return Object.entries(data.users).map(([username, userData]) => {
@@ -515,6 +572,8 @@ module.exports = {
     getStats,
     getSettings,
     updateSettings,
+    getSentReminderKeys,
+    addSentReminderKey,
     getAllUsersForEmail,
     DATA_DIR,
     UPLOADS_DIR

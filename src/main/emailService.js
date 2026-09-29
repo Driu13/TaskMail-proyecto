@@ -14,16 +14,25 @@ try {
     DesktopNotification = null;
 }
 
+<<<<<<< HEAD
 // El archivo con las credenciales de Microsoft Graph vive en la carpeta de
 // datos de usuario del sistema (p. ej. C:\Users\<tú>\AppData\Roaming\TaskMail),
 // NUNCA dentro de la carpeta del proyecto/código fuente. Solo se crea cuando
 // alguien lo configura desde Configuración → Envío de Correo en la interfaz;
 // no existe ningún archivo de plantilla que se pueda editar a mano.
+=======
+// Las credenciales de Microsoft Graph viven en la carpeta de datos de usuario
+// del sistema (p. ej. C:\Users\<tú>\AppData\Roaming\TaskMail), nunca dentro de
+// la carpeta del proyecto.
+>>>>>>> 42f842c2e4980ed01d97605f30559cc61240e240
 function getConfigFilePath() {
     if (electronApp && typeof electronApp.getPath === 'function') {
         return path.join(electronApp.getPath('userData'), 'config.json');
     }
+<<<<<<< HEAD
     // Solo como respaldo si este archivo llegara a correr fuera de Electron.
+=======
+>>>>>>> 42f842c2e4980ed01d97605f30559cc61240e240
     return path.join(__dirname, '../../config.json');
 }
 
@@ -310,6 +319,7 @@ async function sendReminderOnce(user, periodKey, events, subject, label) {
     const result = await sendEmail(user.destinatarios, subject, buildEmailBody(label, events));
     if (result) {
         sentReminderKeys.add(key);
+        storage.addSentReminderKey(key);
         showDesktopNotification(label, events, user.username);
         return true;
     }
@@ -338,12 +348,12 @@ function formatLocalDate(date) {
 }
 
 function formatLocalTime(date) {
-    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 function normalizeTime(time) {
     const parts = String(time).split(':');
-    return `${String(parts[0] || '00').padStart(2, '0')}:${String(parts[1] || '00').padStart(2, '0')}:${String(parts[2] || '00').padStart(2, '0')}`;
+    return `${String(parts[0] || '00').padStart(2, '0')}:${String(parts[1] || '00').padStart(2, '0')}`;
 }
 
 function occursOnDate(task, targetDate) {
@@ -363,11 +373,11 @@ function occursOnDate(task, targetDate) {
 
 function deliveryTimeFor(task) {
     if (!task.hora) return fallbackDeliveryTime;
-    const [hours, minutes, seconds] = normalizeTime(task.hora).split(':').map(Number);
+    const [hours, minutes] = normalizeTime(task.hora).split(':').map(Number);
     const reminder = Number(task.reminderMinutes) || 0;
-    const scheduled = new Date(2000, 0, 1, hours, minutes, seconds);
+    const scheduled = new Date(2000, 0, 1, hours, minutes, 0);
     scheduled.setMinutes(scheduled.getMinutes() - reminder);
-    return `${String(scheduled.getHours()).padStart(2, '0')}:${String(scheduled.getMinutes()).padStart(2, '0')}:${String(scheduled.getSeconds()).padStart(2, '0')}`;
+    return `${String(scheduled.getHours()).padStart(2, '0')}:${String(scheduled.getMinutes()).padStart(2, '0')}`;
 }
 
 // ==========================================
@@ -458,9 +468,9 @@ async function sendEmail(destinatarios, subject, html) {
 // CONFIGURAR CRON JOB
 // ==========================================
 let cronJob = null;
-let fallbackDeliveryTime = '03:00:00';
+let fallbackDeliveryTime = '03:00';
 let reminderCheckRunning = false;
-const sentReminderKeys = new Set();
+const sentReminderKeys = new Set(storage.getSentReminderKeys());
 
 function setupDailyCron(hour = 3, minute = 0) {
     if (cronJob) {
@@ -468,8 +478,8 @@ function setupDailyCron(hour = 3, minute = 0) {
         console.log('⏹ Cron anterior detenido');
     }
 
-    fallbackDeliveryTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
-    const expression = '* * * * * *';
+    fallbackDeliveryTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    const expression = '* * * * *';
     console.log(`⏰ Recordatorios exactos activos; eventos sin hora y avisos anticipados salen a las ${fallbackDeliveryTime}`);
 
     cronJob = cron.schedule(expression, async () => {

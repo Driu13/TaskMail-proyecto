@@ -1338,6 +1338,41 @@ async function renderSettings(container) {
         smtpFeedback(t('smtpCleared'));
     });
 
+    document.getElementById('btn-save-username').addEventListener('click', async () => {
+        const input = document.getElementById('profile-username');
+        const errorEl = document.getElementById('username-error');
+        const newUsername = input.value.trim();
+        errorEl.textContent = '';
+
+        if (newUsername === State.currentUser.usuario) return;
+
+        if (!/^[a-zA-Z0-9_]{4,20}$/.test(newUsername)) {
+            errorEl.textContent = 'Debe tener 4-20 caracteres: letras, números o guion bajo.';
+            return;
+        }
+
+        const btn = document.getElementById('btn-save-username');
+        btn.disabled = true;
+
+        const result = await window.api.user.renameUsername(State.currentUser.usuario, newUsername);
+        btn.disabled = false;
+
+        if (!result.success) {
+            errorEl.textContent = result.error;
+            return;
+        }
+
+        // Actualiza el usuario en memoria y en la sesión guardada
+        State.currentUser.usuario = result.username;
+        localStorage.setItem('sesionActual', JSON.stringify(State.currentUser));
+        if (localStorage.getItem('rememberedUser')) {
+            localStorage.setItem('rememberedUser', result.username);
+        }
+        await loadUserData();
+        updateUserProfile();
+        renderView('settings');
+    });
+
     document.getElementById('btn-add-email').addEventListener('click', async () => {
         const email = document.getElementById('new-email').value;
         if (!email) return;

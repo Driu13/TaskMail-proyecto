@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ==========================================
-// UTILIDADES DE INTERFAZ EXISTENTES
+// UTILIDADES DE INTERFAZ
 // ==========================================
 function togglePassword(id) {
     const input = document.getElementById(id);
@@ -111,24 +111,6 @@ function togglePassword(id) {
         input.type = 'password';
         toggle.dataset.visible = 'false';
         toggle.setAttribute('aria-label', currentLang === 'es' ? 'Mostrar contraseña' : 'Show password');
-    }
-}
-
-// ==========================================
-// UTILIDADES DE INTERFAZ
-// ==========================================
-function togglePassword(id) {
-    const input = document.getElementById(id);
-    const toggle = input.parentNode.querySelector('.toggle-password');
-
-    if (input.type === 'password') {
-        input.type = 'text';
-        toggle.dataset.visible = 'true';
-        toggle.setAttribute('aria-label', 'Ocultar contraseña');
-    } else {
-        input.type = 'password';
-        toggle.dataset.visible = 'false';
-        toggle.setAttribute('aria-label', 'Mostrar contraseña');
     }
 }
 
@@ -245,11 +227,10 @@ document.getElementById('formularioLogin').addEventListener('submit', async func
 
     limpiarErrores('errorLoginUsuario', 'errorLoginPassword', 'errorLoginGeneral');
 
-    const errorU = validarUsuario(usuario);
-    const errorP = validarPassword(password);
-
-    if (errorU) { mostrarError('errorLoginUsuario', errorU); return; }
-    if (errorP) { mostrarError('errorLoginPassword', errorP); return; }
+    // Al iniciar sesión solo se comprueba que los campos vengan llenos: las
+    // reglas de complejidad aplican al crear la cuenta, no al entrar.
+    if (!usuario) { mostrarError('errorLoginUsuario', 'El usuario es obligatorio.'); return; }
+    if (!password) { mostrarError('errorLoginPassword', 'La contraseña es obligatoria.'); return; }
 
     try {
         const result = await window.api.auth.login(usuario, password);
