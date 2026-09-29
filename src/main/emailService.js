@@ -3,15 +3,29 @@ const path = require('path');
 const fs = require('fs');
 const storage = require('./storage');
 
+let electronApp = null;
 let DesktopNotification = null;
 try {
     const electron = require('electron');
+    electronApp = electron.app || null;
     DesktopNotification = electron.Notification || null;
 } catch (error) {
+    electronApp = null;
     DesktopNotification = null;
 }
 
-const CONFIG_FILE = path.join(__dirname, '../../config.json');
+// El archivo con las credenciales de Microsoft Graph vive en la carpeta de
+// datos de usuario del sistema (p. ej. C:\Users\<tú>\AppData\Roaming\TaskMail),
+// NUNCA dentro de la carpeta del proyecto/código fuente. Solo se crea cuando
+// alguien lo configura desde Configuración → Envío de Correo en la interfaz;
+// no existe ningún archivo de plantilla que se pueda editar a mano.
+function getConfigFilePath() {
+    if (electronApp && typeof electronApp.getPath === 'function') {
+        return path.join(electronApp.getPath('userData'), 'config.json');
+    }
+    // Solo como respaldo si este archivo llegara a correr fuera de Electron.
+    return path.join(__dirname, '../../config.json');
+}
 
 // ==========================================
 // ENVÍO DE CORREO VÍA MICROSOFT GRAPH API
@@ -24,10 +38,11 @@ const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
 let cachedToken = null; // { accessToken, expiresAt }
 
 function readGraphConfig() {
-    if (!fs.existsSync(CONFIG_FILE)) {
+    const configFile = getConfigFilePath();
+    if (!fs.existsSync(configFile)) {
         return { graph: {} };
     }
-    const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+    const raw = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
     return { graph: raw.graph || {} };
 }
 
@@ -70,7 +85,7 @@ function configureGraph({ tenantId, clientId, clientSecret, senderEmail }) {
         }
     };
 
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+    fs.writeFileSync(getConfigFilePath(), JSON.stringify(config, null, 2), 'utf-8');
     cachedToken = null; // fuerza a pedir un token nuevo con las credenciales actualizadas
 
     return getGraphStatus();
@@ -78,7 +93,7 @@ function configureGraph({ tenantId, clientId, clientSecret, senderEmail }) {
 
 // Borra las credenciales guardadas
 function clearGraph() {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ graph: {} }, null, 2), 'utf-8');
+    fs.writeFileSync(getConfigFilePath(), JSON.stringify({ graph: {} }, null, 2), 'utf-8');
     cachedToken = null;
     return getGraphStatus();
 }
@@ -470,4 +485,4 @@ function setupDailyCron(hour = 3, minute = 0) {
     checkAndSendReminders();
 }
 
-module.exports = { setupDailyCron, checkAndSendReminders, checkRemindersNow, getGraphStatus, configureGraph, clearGraph, sendTestEmail, sendEmail };
+module.exports = { setupDailyCron, checkAndSendReminders, checkRemindersNow, getGraphStatus, configureGraph, clearGraph, sendTestEmail };
