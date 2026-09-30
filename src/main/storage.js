@@ -286,8 +286,8 @@ function verifyAdminCode(code) {
 }
 
 function updateAdminCode(code) {
-    if (typeof code !== 'string' || code.length < 10) {
-        throw new Error('El código de administrador debe tener al menos 10 caracteres.');
+    if (typeof code !== 'string' || code.length < 5) {
+        throw new Error('El código de administrador debe tener al menos 5 caracteres.');
     }
     updateSettings({ adminCodeHash: hashPassword(code) });
 }

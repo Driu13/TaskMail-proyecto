@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
         verifyPassword: (username, password) => ipcRenderer.invoke('auth:verifyPassword', { username, password }),
         register: (username, password) => ipcRenderer.invoke('auth:register', { username, password }),
         adminLogin: (code) => ipcRenderer.invoke('auth:adminLogin', { code }),
+        changeAdminCode: (adminToken, code) => ipcRenderer.invoke('auth:changeAdminCode', { adminToken, code }),
     },
     user: {
         getData: (username) => ipcRenderer.invoke('user:getData', username),

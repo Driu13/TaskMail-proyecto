@@ -53,6 +53,16 @@ ipcMain.handle('auth:adminLogin', async (event, { code }) => {
     return { success: true, session: { usuario: 'Administrador', rol: 'admin', adminToken } };
 });
 
+ipcMain.handle('auth:changeAdminCode', async (event, { adminToken, code }) => {
+    try {
+        requireAdminToken(adminToken);
+        storage.updateAdminCode(String(code || ''));
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
 ipcMain.handle('user:renameUsername', async (event, { username, newUsername }) => {
     try {
         const { username: renamed } = storage.renameUser(username, newUsername);
@@ -184,47 +194,8 @@ ipcMain.handle('settings:updateTime', async (event, { hour, minute }) => {
 ipcMain.handle('settings:get', () => storage.getSettings());
 
 // ==========================================
-// MICROSOFT GRAPH: configuración de correo desde la UI
+// SMTP: configuración de correo desde la UI
 // ==========================================
-ipcMain.handle('graph:get', (event, { adminToken } = {}) => {
-    try {
-        requireAdminToken(adminToken);
-        return emailService.getGraphStatus();
-    } catch (error) {
-        return { configured: false, tenantId: null, clientId: null, senderEmail: null };
-    }
-});
-
-ipcMain.handle('graph:set', async (event, { adminToken, tenantId, clientId, clientSecret, senderEmail }) => {
-    try {
-        requireAdminToken(adminToken);
-        const status = emailService.configureGraph({ tenantId, clientId, clientSecret, senderEmail });
-        return { success: true, status };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-});
-
-ipcMain.handle('graph:test', async (event, { adminToken, to } = {}) => {
-    try {
-        requireAdminToken(adminToken);
-        const result = await emailService.sendTestEmail(to);
-        return { success: true, ...result };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-});
-
-ipcMain.handle('graph:clear', (event, { adminToken } = {}) => {
-    try {
-        requireAdminToken(adminToken);
-        const status = emailService.clearGraph();
-        return { success: true, status };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-});
-
 for (const [channel, method] of [['smtp:get', 'getSmtpStatus'], ['smtp:clear', 'clearSmtp']]) {
     ipcMain.handle(channel, (event, { adminToken } = {}) => {
         try { requireAdminToken(adminToken); return { success: true, status: emailService[method]() }; }

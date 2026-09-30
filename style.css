@@ -865,6 +865,16 @@ body {
 .settings-toggle input:focus-visible + i { outline: 3px solid rgba(227, 101, 80, 0.28); outline-offset: 2px; }
 .settings-feedback { min-height: 18px; margin: 10px 0 0; color: var(--color-success); font-size: 12px; opacity: 0; transform: translateY(3px); transition: opacity 0.2s ease, transform 0.2s ease; }
 .settings-feedback.is-visible { opacity: 1; transform: translateY(0); }
+.settings-feedback.is-error { color: var(--color-danger); }
+.settings-feedback.is-success { color: var(--color-success); animation: taskmail-feedback-pop 0.32s ease-out; }
+
+.admin-code-match { display: block; min-height: 18px; margin-top: 7px; font-size: 12px; font-weight: 600; opacity: 0; transform: translateY(-3px); transition: opacity 0.18s ease, transform 0.18s ease; }
+.admin-code-match.is-valid, .admin-code-match.is-invalid { opacity: 1; transform: translateY(0); }
+.admin-code-match.is-valid { color: var(--color-success); }
+.admin-code-match.is-invalid { color: var(--color-danger); }
+.admin-code-toggle { cursor: pointer; }
+
+@keyframes taskmail-feedback-pop { 0% { transform: translateY(5px); } 60% { transform: translateY(-2px); } 100% { transform: translateY(0); } }
 .btn-save, .btn-primary { background: var(--bg-accent); border-color: var(--bg-accent); }
 .btn-save:hover, .btn-primary:hover { background: var(--bg-accent-hover); border-color: var(--bg-accent-hover); }
 
